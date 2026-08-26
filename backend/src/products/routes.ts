@@ -1,4 +1,4 @@
-﻿import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ProductService, ProductQueryFilters } from './service.js';
 
 export const productRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
@@ -54,6 +54,24 @@ export const productRoutes: FastifyPluginAsync = async (fastify: FastifyInstance
 
     return reply.status(200).send({
       product,
+    });
+  });
+
+  // GET /api/products/:id/images
+  fastify.get('/:id/images', async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    if (!id) {
+      return reply.status(400).send({
+        error: 'Bad Request',
+        message: 'Product ID or slug is required.',
+      });
+    }
+
+    const images = await ProductService.getProductImages(id);
+
+    return reply.status(200).send({
+      images,
     });
   });
 };

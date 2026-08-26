@@ -1,6 +1,7 @@
 import fastify, { FastifyInstance, FastifyServerOptions } from 'fastify';
 import cors from '@fastify/cors';
 import sensible from '@fastify/sensible';
+import multipart from '@fastify/multipart';
 import { config } from './common/config.js';
 import { errorHandler } from './common/errors.js';
 import { authRoutes } from './auth/routes.js';
@@ -24,6 +25,13 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
 
   // Sensible defaults and HTTP error utilities
   await app.register(sensible);
+
+  // Multipart support for file uploads (10MB limit)
+  await app.register(multipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024,
+    },
+  });
 
   // CORS configuration driven by FRONTEND_URL environment variable
   const allowedOrigins = config.FRONTEND_URL.includes(',')

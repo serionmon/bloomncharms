@@ -13,8 +13,8 @@ See PROJECT_MEMORY.md for current milestone status.
 ## Phase 2 — Backend + Data (🔄 In Progress)
 - Milestone 2: Backend Catalog API & Supabase Integration (✅ Complete)
 - Milestone 3: RLS + Auth (Supabase Auth) (✅ Complete)
-- Milestone 4: Supabase Storage
-- Milestone 5: Admin authorization + product management
+- Milestone 4: Supabase Storage (✅ Complete)
+- Milestone 5: Admin authorization + product management (✅ Complete)
 - Milestone 6: Inventory + discounts
 - Milestone 7: Customer accounts
 

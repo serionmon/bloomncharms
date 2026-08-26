@@ -1,5 +1,6 @@
 import { getAdminSupabaseClient, getAnonSupabaseClient } from '../common/supabase.js';
 import { config } from '../common/config.js';
+import { StorageService, type ProductImageRecord } from '../storage/service.js';
 
 export interface ProductDTO {
   id: string;
@@ -19,7 +20,9 @@ export interface ProductDTO {
   isCustomizable?: boolean;
   isFeatured?: boolean;
   processingDays?: number;
+  images?: ProductImageRecord[];
 }
+
 
 export interface CategoryDTO {
   id: string;
@@ -376,6 +379,7 @@ export class ProductService {
           let mapped: ProductDTO[] = data.map((item: any) => {
             const categorySlug = item.categories?.slug || 'bouquets';
             const stockQty = item.inventory?.stock_quantity ?? 0;
+            const imageUrl = item.image_url ? StorageService.getPublicUrl(item.image_url) : '/images/products/signature-bloom-bouquet.jpg';
             return {
               id: item.id,
               slug: item.slug,
@@ -384,7 +388,7 @@ export class ProductService {
               category: categorySlug,
               price: Number(item.price),
               currency: item.currency === 'INR' ? '₹' : item.currency,
-              image: item.image_url || '/images/products/signature-bloom-bouquet.jpg',
+              image: imageUrl,
               alt: item.alt_text || item.name,
               description: item.description,
               stock: stockQty,
@@ -436,7 +440,7 @@ export class ProductService {
   }
 
   /**
-   * Fetches a single active product by slug.
+   * Fetches a single active product by slug, including attached gallery images.
    */
   static async getProductBySlug(slug: string): Promise<ProductDTO | null> {
     const hasSupabase = Boolean(config.SUPABASE_URL && (config.SUPABASE_SERVICE_ROLE_KEY || config.SUPABASE_ANON_KEY));
@@ -479,6 +483,11 @@ export class ProductService {
         if (!error && data) {
           const categorySlug = (data as any).categories?.slug || 'bouquets';
           const stockQty = (data as any).inventory?.stock_quantity ?? 0;
+          const imageUrl = data.image_url ? StorageService.getPublicUrl(data.image_url) : '/images/products/signature-bloom-bouquet.jpg';
+
+          // Fetch gallery images if available
+          const galleryImages = await StorageService.getProductImages(data.id);
+
           return {
             id: data.id,
             slug: data.slug,
@@ -487,7 +496,7 @@ export class ProductService {
             category: categorySlug,
             price: Number(data.price),
             currency: data.currency === 'INR' ? '₹' : data.currency,
-            image: data.image_url || '/images/products/signature-bloom-bouquet.jpg',
+            image: imageUrl,
             alt: data.alt_text || data.name,
             description: data.description,
             stock: stockQty,
@@ -497,6 +506,7 @@ export class ProductService {
             isCustomizable: data.is_customizable,
             isFeatured: data.is_featured,
             processingDays: data.processing_days || undefined,
+            images: galleryImages.length > 0 ? galleryImages : undefined,
           };
         }
       } catch (err) {
@@ -507,6 +517,24 @@ export class ProductService {
     const found = SEED_PRODUCTS.find((p) => p.slug === slug);
     return found || null;
   }
+
+  /**
+   * Fetches all images attached to a product by ID or slug.
+   */
+  static async getProductImages(productIdOrSlug: string): Promise<ProductImageRecord[]> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productIdOrSlug);
+
+    if (isUuid) {
+      return await StorageService.getProductImages(productIdOrSlug);
+    }
+
+    // If a slug was passed, look up the product ID first
+    const product = await this.getProductBySlug(productIdOrSlug);
+    if (!product) return [];
+
+    return await StorageService.getProductImages(product.id);
+  }
+
 
   /**
    * Fetches active product categories with counts.

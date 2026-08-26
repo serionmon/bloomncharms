@@ -8,6 +8,15 @@ import { type Database } from './types';
  * so that the session cookie is kept alive on every request.
  */
 export async function updateSession(request: NextRequest) {
+  // If Supabase is not configured (e.g. local dev without .env.local),
+  // skip session refresh and allow all traffic through without auth guards.
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(

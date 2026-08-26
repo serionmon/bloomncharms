@@ -54,3 +54,30 @@ export async function authenticate(
     role: (profile?.role as 'customer' | 'admin') ?? 'customer',
   };
 }
+
+/**
+ * Fastify preHandler — verifies the user is authenticated AND has the 'admin' role.
+ *
+ * If not authenticated: returns 401 Unauthorized
+ * If authenticated as customer: returns 403 Forbidden
+ */
+export async function requireAdmin(
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  // If authenticate hasn't run yet, run it
+  if (!request.user) {
+    await authenticate(request, reply);
+    // If reply was sent in authenticate (e.g. 401), stop execution
+    if (reply.sent) return;
+  }
+
+  if (request.user?.role !== 'admin') {
+    return reply.status(403).send({
+      statusCode: 403,
+      error: 'Forbidden',
+      message: 'Access denied: Admin privileges required.',
+    });
+  }
+}
+

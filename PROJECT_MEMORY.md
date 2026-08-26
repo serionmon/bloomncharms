@@ -7,7 +7,7 @@
 
 ## CURRENT MILESTONE
 
-**Milestone 4 — Supabase Storage**  
+**Milestone 6 — Inventory + Discounts**  
 Status: ⬜ Not started
 
 ---
@@ -19,8 +19,8 @@ Status: ⬜ Not started
 | 1 | Frontend Stabilization | ✅ Complete |
 | 2 | Backend Catalog API & Supabase Integration | ✅ Complete |
 | 3 | Row Level Security + Auth | ✅ Complete |
-| 4 | Supabase Storage | ⬜ Not started |
-| 5 | Admin Authorization + Products | ⬜ Not started |
+| 4 | Supabase Storage | ✅ Complete |
+| 5 | Admin Authorization + Products | ✅ Complete |
 | 6 | Inventory + Discounts | ⬜ Not started |
 | 7 | Customer Accounts | ⬜ Not started |
 | 8 | Orders | ⬜ Not started |
@@ -29,6 +29,76 @@ Status: ⬜ Not started
 | 11 | Shipping (Shiprocket) | ⬜ Not started |
 | 12 | Reverse Proxy (Caddy) | ⬜ Not started |
 | 13 | Production Hardening | ⬜ Not started |
+
+---
+
+## MILESTONE 5 — COMPLETE: Admin Authorization + Products
+
+### Backend Architecture
+- Fastify `requireAdmin` preHandler (`backend/src/auth/plugin.ts`): Enforces authenticated admin identity (401 unauthenticated, 403 customer).
+- `AdminProductService` (`backend/src/admin/service.ts`):
+  - `listProducts()`: Full product list including inactive items, inventory quantities, and gallery images.
+  - `getProductById(id)`: Single product retrieval with all relational data.
+  - `createProduct(input)`: Auto-slugification with uniqueness checks, SKU uniqueness enforcement, atomic product row insert, and linked inventory record initialization.
+  - `updateProduct(id, input)`: Partial updates with slug/SKU collision protection and inventory stock updates.
+  - `deactivateProduct(id)`: Soft-deletion (`is_active = false`).
+  - `deleteProduct(id)`: Cascading removal from database and storage.
+- Validation (`backend/src/admin/validation.ts`): Zod schemas for create/update payloads and URL `slugify` generator.
+- Admin Endpoints (`backend/src/admin/routes.ts`):
+  - `GET /api/admin/products`
+  - `GET /api/admin/products/:id`
+  - `POST /api/admin/products`
+  - `PUT /api/admin/products/:id`
+  - `PATCH /api/admin/products/:id/deactivate`
+  - `DELETE /api/admin/products/:id` — **soft-deactivates** (`is_active = false`); does NOT hard-delete; images and historical order references remain intact.
+  - `POST /api/admin/products/:id/images`
+  - `PATCH /api/admin/products/:id/images/:imageId`
+  - `DELETE /api/admin/products/:id/images/:imageId`
+
+### Security Verification
+- IDOR / Privilege escalation check: Customer tokens cannot access or manipulate admin product endpoints.
+- Slug/SKU uniqueness: Enforced in application layer with 409 Conflict and database unique constraints.
+- Service-role key remains backend-only.
+- All 7 tests in `test-admin-products.ts` pass.
+
+
+---
+
+## MILESTONE 4 — COMPLETE: Supabase Storage + Product Image Infrastructure
+
+### Database & Storage
+- `supabase/migrations/20260826000002_storage_hardening.sql`: Idempotent migration creating/verifying `product-images` storage bucket (public read, 10MB limit, allowed MIME types `image/jpeg`, `image/png`, `image/webp`).
+- Storage RLS: Public SELECT for `bucket_id = 'product-images'`; Admin INSERT/UPDATE/DELETE verified with `public.is_admin()` check.
+- `public.product_images` table RLS verified: Public read on active products, Admin all.
+
+### Backend Storage Layer
+- `@fastify/multipart` installed and registered in `backend/src/app.ts` (10MB limit).
+- `StorageService` (`backend/src/storage/service.ts`):
+  - `getPublicUrl(storagePath)`: Resolves public CDN URLs.
+  - `uploadProductImage(...)`: Validates file size, MIME type, and magic bytes signature; uploads to `products/${productId}/${uuid}.${ext}`; records entry in `public.product_images`.
+  - `replaceProductImage(...)`: Replaces storage object and updates DB record.
+  - `deleteProductImage(...)`: Removes file from storage and deletes DB record.
+  - `updateImageMetadata(...)`: Updates alt text and sort order.
+  - `getProductImages(...)`: Retrieves gallery images with resolved public URLs.
+- Image Validation (`backend/src/storage/validation.ts`): Zod schemas + magic bytes binary signature validator (JPEG, PNG, WebP) to prevent MIME spoofing.
+- Fastify Auth PreHandlers (`backend/src/auth/plugin.ts`): `requireAdmin` preHandler protecting admin endpoints (401 unauthenticated, 403 customer).
+- Admin Endpoints (`backend/src/admin/routes.ts`):
+  - `POST /api/admin/products/:id/images` (multipart & base64 JSON support)
+  - `PATCH /api/admin/products/:id/images/:imageId`
+  - `DELETE /api/admin/products/:id/images/:imageId`
+- Catalog Integration (`backend/src/products/routes.ts` & `service.ts`):
+  - `GET /api/products/:id/images`: Public product gallery images endpoint.
+  - `getProductBySlug`: Resolves storage image URLs and includes gallery images.
+  - Backward compatibility: Local static image paths (`/images/products/...`) and remote CDN URLs remain 100% functional with offline fallback.
+
+### Test & Build Results
+- Backend typecheck (`tsc --noEmit`): 0 errors.
+- Backend build (`npm run build`): Clean.
+- Frontend typecheck (`tsc --noEmit`): 0 errors.
+- Frontend build (`next build`): 20 pages compiled.
+- Storage Verification Suite (`test-storage.ts`): All 10 tests passed (401/403/400 boundary guards, magic byte checks, URL generation).
+
+---
 
 ---
 

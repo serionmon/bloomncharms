@@ -1,6 +1,81 @@
 # Bloomncharms — Changelog
 
-## [0.3.0] — 2026-08-26 — Supabase Auth + RLS (Milestone 3)
+## [0.5.1] — 2026-08-26 — Admin DELETE Corrected to Soft-Delete
+
+### Changed
+
+- `DELETE /api/admin/products/:id` (`backend/src/admin/routes.ts`):
+  - **Before**: Called `AdminProductService.deleteProduct()` — permanent cascade removal from the database.
+  - **After**: Calls `AdminProductService.deactivateProduct()` — sets `is_active = false`, preserves the row, all product images, and leaves historical `order_items` referencing the product ID fully intact.
+  - Hard physical deletion is no longer reachable from any HTTP endpoint.  Only the `AdminProductService.deleteProduct()` method remains in the service layer for potential future internal/maintenance use.
+
+### Tests Updated
+
+- `backend/src/scripts/test-admin-products.ts`:
+  - Step 9 now asserts `DELETE` returns `{ product: { isActive: false }, message: "...deactivated..." }`.
+  - Additional assertion verifies product row is **still retrievable** after `DELETE` (confirms soft-delete, not hard-delete).
+
+---
+
+
+### Added
+
+#### Admin Backend & Product Management
+- `AdminProductService` (`backend/src/admin/service.ts`):
+  - `listProducts()`: Returns all active and inactive catalog products with associated categories, inventory, and images.
+  - `getProductById(id)`: Comprehensive product retrieval.
+  - `createProduct(input)`: Validates inputs, enforces slug and SKU uniqueness (409 Conflict), inserts product and initializes inventory record.
+  - `updateProduct(id, input)`: Partial updates with slug/SKU collision checks and inventory stock sync.
+  - `deactivateProduct(id)`: Soft deletion (`is_active = false`).
+  - `deleteProduct(id)`: Cascading removal from database.
+- Admin Validation (`backend/src/admin/validation.ts`): Zod schemas for create/update product payloads and slug generator.
+- Admin Routes (`backend/src/admin/routes.ts`):
+  - `GET /api/admin/products`
+  - `GET /api/admin/products/:id`
+  - `POST /api/admin/products`
+  - `PUT /api/admin/products/:id`
+  - `PATCH /api/admin/products/:id/deactivate`
+  - `DELETE /api/admin/products/:id`
+- Automated Test Suite (`backend/src/scripts/test-admin-products.ts`): Complete verification suite for admin authentication, customer authorization boundaries, product CRUD, uniqueness checks, deactivation, and image operations.
+
+### Verified
+- Backend typecheck (`npm run typecheck`): 0 errors.
+- Backend build (`npm run build`): Clean build to `dist/`.
+- Frontend typecheck (`npm run typecheck`): 0 errors.
+- Frontend build (`npm run build`): All 20 routes compiled cleanly.
+
+---
+
+
+### Added
+
+#### Database & Storage
+- `supabase/migrations/20260826000002_storage_hardening.sql`: Created `product-images` storage bucket (public CDN read, 10MB file limit, restricted to `image/jpeg`, `image/png`, `image/webp`).
+- Storage RLS: Public read policy on `storage.objects` for `product-images`; Admin-only upload, update, and delete policies with `public.is_admin()` check.
+- `public.product_images` table RLS policies verified.
+
+#### Backend Storage Architecture
+- Added `@fastify/multipart` dependency and registered plugin in `backend/src/app.ts`.
+- `StorageService` (`backend/src/storage/service.ts`): Reusable service for uploading product images to scoped paths (`products/${productId}/${uuid}.${ext}`), replacing images, deleting images, updating image metadata (alt text, sort order), and resolving public CDN URLs.
+- Image Validation (`backend/src/storage/validation.ts`): Zod schemas for parameters and payloads; binary magic byte header validator (JPEG, PNG, WebP) to prevent MIME spoofing; 10MB maximum file size enforcement.
+- Admin PreHandler (`backend/src/auth/plugin.ts`): Added `requireAdmin` preHandler returning 401 for unauthenticated requests and 403 Forbidden for non-admin users.
+- Admin Endpoints (`backend/src/admin/routes.ts`):
+  - `POST /api/admin/products/:id/images`: Uploads image and creates `product_images` row (supports multipart forms and base64 JSON).
+  - `PATCH /api/admin/products/:id/images/:imageId`: Updates image alt text and sort order.
+  - `DELETE /api/admin/products/:id/images/:imageId`: Deletes storage file and removes database record.
+- Catalog Integration (`backend/src/products/routes.ts` & `service.ts`):
+  - `GET /api/products/:id/images`: Public endpoint returning gallery images with resolved public URLs.
+  - `getProductBySlug`: Enriched to include gallery images and resolve Supabase Storage paths while preserving 100% backward compatibility with static local assets.
+- Automated Test Suite (`backend/src/scripts/test-storage.ts`): 10 tests covering public image resolution, 401 unauthenticated upload, 403 customer upload, 400 invalid MIME / magic byte check, 400 oversized file, 401/403 delete guards, and CRUD lifecycle.
+
+### Verified
+- Backend typecheck (`npm run typecheck`): 0 errors.
+- Backend build (`npm run build`): Clean build to `dist/`.
+- Frontend typecheck (`npm run typecheck`): 0 errors.
+- Frontend build (`npm run build`): All 20 routes generated cleanly.
+
+---
+
 
 ### Added
 
