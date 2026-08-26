@@ -86,9 +86,11 @@ export default function Header() {
             className="p-xs text-on-surface hover:text-primary transition-colors relative flex items-center cursor-pointer"
           >
             <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
-            <span className="absolute top-0 right-0 h-4 w-4 bg-primary rounded-full text-[9px] font-bold flex items-center justify-center text-on-primary">
-              {totalCount}
-            </span>
+            {totalCount > 0 && (
+              <span className="absolute top-0 right-0 h-4 w-4 bg-primary rounded-full text-[9px] font-bold flex items-center justify-center text-on-primary">
+                {totalCount > 99 ? '99+' : totalCount}
+              </span>
+            )}
           </button>
 
           {/* Mobile Menu Toggle */}

@@ -24,6 +24,7 @@ interface FormErrors {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  email?: string;
   address?: string;
   city?: string;
   state?: string;
@@ -62,14 +63,22 @@ export default function CheckoutPage() {
 
   const validateStep1 = (): boolean => {
     const newErrors: FormErrors = {};
+    // Allows letters, spaces, hyphens, apostrophes — covers Indian names and states
+    const nameRegex = /^[A-Za-z][A-Za-z\s'\-]*$/;
+    const phoneRegex = /^[6-9]\d{9}$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const pinRegex = /^\d{6}$/;
 
-    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-    if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
-    if (!formData.address.trim()) newErrors.address = 'Delivery address is required';
-    if (!formData.city.trim()) newErrors.city = 'City is required';
-    if (!formData.state.trim()) newErrors.state = 'State is required';
-    if (!formData.pinCode.trim()) newErrors.pinCode = 'PIN Code is required';
+    if (formData.firstName.trim().length < 2 || !nameRegex.test(formData.firstName.trim())) newErrors.firstName = 'Enter a valid first name (letters only, min 2 chars)';
+    if (formData.lastName.trim().length < 2 || !nameRegex.test(formData.lastName.trim())) newErrors.lastName = 'Enter a valid last name (letters only, min 2 chars)';
+    // Strip spaces, dashes and common Indian prefixes (+91, 91, 0) before checking
+    const normalizedPhone = formData.phone.replace(/[\s\-().+]/g, '').replace(/^(91|0)/, '');
+    if (!normalizedPhone || !phoneRegex.test(normalizedPhone)) newErrors.phone = 'Enter a valid 10-digit Indian mobile number (e.g. 98765 43210)';
+    if (formData.email && !emailRegex.test(formData.email)) newErrors.email = 'Invalid email format';
+    if (formData.address.trim().length < 8) newErrors.address = 'Address must be at least 8 characters';
+    if (formData.city.trim().length < 2 || !nameRegex.test(formData.city.trim())) newErrors.city = 'Enter a valid city name';
+    if (formData.state.trim().length < 2 || !nameRegex.test(formData.state.trim())) newErrors.state = 'Enter a valid state name';
+    if (!pinRegex.test(formData.pinCode.trim())) newErrors.pinCode = 'PIN Code must be exactly 6 digits';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -84,11 +93,14 @@ export default function CheckoutPage() {
   };
 
   const handleContinueToReview = () => {
-    setStep(3);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (validateStep1()) {
+      setStep(3);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handlePlaceOrder = () => {
+    if (items.length === 0) return;
     if (!validateStep1()) {
       setStep(1);
       return;
@@ -96,8 +108,6 @@ export default function CheckoutPage() {
 
     setIsPlacingOrder(true);
 
-    // Frontend-only demonstration preview. Real order placement and payment execution
-    // are authoritative on the backend.
     window.setTimeout(() => {
       setGeneratedOrderNumber('BC-DEMO-PREVIEW');
       setIsSuccessModalOpen(true);
@@ -256,7 +266,7 @@ export default function CheckoutPage() {
                       <input
                         id="phone"
                         type="tel"
-                        placeholder="e.g. +91 98765 43210"
+                        placeholder="e.g. 9876543210"
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         className={`w-full bg-transparent border-b py-2 font-body-md text-on-surface placeholder:text-on-surface-muted/40 focus:outline-none transition-colors ${
@@ -281,8 +291,15 @@ export default function CheckoutPage() {
                         placeholder="e.g. aditi@example.com"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full bg-transparent border-b border-border py-2 font-body-md text-on-surface placeholder:text-on-surface-muted/40 focus:outline-none focus:border-primary transition-colors"
+                        className={`w-full bg-transparent border-b py-2 font-body-md text-on-surface placeholder:text-on-surface-muted/40 focus:outline-none transition-colors ${
+                          errors.email ? 'border-error' : 'border-border focus:border-primary'
+                        }`}
                       />
+                      {errors.email && (
+                        <span className="font-body-md text-[11px] text-error mt-0.5">
+                          {errors.email}
+                        </span>
+                      )}
                     </div>
 
                     {/* Address */}
@@ -374,9 +391,11 @@ export default function CheckoutPage() {
                         <input
                           id="pinCode"
                           type="text"
+                          inputMode="numeric"
+                          maxLength={6}
                           placeholder="e.g. 400001"
                           value={formData.pinCode}
-                          onChange={(e) => setFormData({ ...formData, pinCode: e.target.value })}
+                          onChange={(e) => setFormData({ ...formData, pinCode: e.target.value.replace(/\D/g, '') })}
                           className={`w-full bg-transparent border-b py-2 font-body-md text-on-surface placeholder:text-on-surface-muted/40 focus:outline-none transition-colors ${
                             errors.pinCode ? 'border-error' : 'border-border focus:border-primary'
                           }`}
@@ -613,7 +632,7 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       onClick={handlePlaceOrder}
-                      disabled={isPlacingOrder}
+                      disabled={isPlacingOrder || items.length === 0}
                       className="flex-1 bg-primary text-on-primary py-4 px-lg rounded font-label-sm text-xs uppercase tracking-widest hover:bg-primary-container focus-visible:ring-2 focus-visible:ring-primary outline-none transition-all duration-300 flex items-center justify-center gap-sm group shadow-md cursor-pointer disabled:opacity-50"
                     >
                       {isPlacingOrder ? 'PLACING ORDER...' : `PLACE ORDER (₹${payNowAmount.toLocaleString('en-IN')})`}

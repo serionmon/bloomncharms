@@ -33,3 +33,5 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/*.log
 *.tsbuildinfo
+
+supabase/.temp/

@@ -52,3 +52,40 @@ npm run dev
 ```
 
 The next implementation phase can safely focus on backend integration without first undoing the frontend architecture.
+
+---
+
+## Additional Fixes — Cart + Checkout Validation Pass (2026-08-26)
+
+### Cart
+- Cart badge in Header fixed to only render when item count > 0 (previously always showed "0").
+- Cart badge capped at 99+.
+- Cart logic (addItem, incrementItem, decrementItem, removeItem, updateQuantity) verified correct — no changes needed.
+- CartProvider localStorage hydration guard confirmed preventing SSR mismatch.
+
+### Checkout — Validation
+- Added `email` to `FormErrors` interface.
+- `validateStep1()` upgraded from presence-only checks to real validation:
+  - **Names**: min 2 chars, letters/hyphens/apostrophes (covers D'Souza, Singh-Kumar, etc.)
+  - **Phone**: 10-digit Indian mobile (6-9 prefix); strips +91/91/0 prefix on normalization
+  - **Email**: validated only when non-empty
+  - **Address**: min 8 characters
+  - **City/State**: min 2 chars, letters/hyphens/apostrophes
+  - **PIN Code**: exactly 6 digits; input strips non-digits with `inputMode="numeric"` + `maxLength={6}`
+- Email error border + message now actually render.
+
+### Checkout — Step Flow
+- `handleContinueToReview()` now calls `validateStep1()` before advancing (was missing).
+- Step 2 → 3 transition is now gated on valid delivery data.
+- `handlePlaceOrder()` guards against empty cart.
+
+### Created
+- `PROJECT_MEMORY.md` — milestone tracker
+- `ROADMAP.md` — engineering roadmap
+- `CHANGELOG.md` — version changelog
+- `ARCHITECTURE.md` — architecture reference
+
+### TypeScript + Build
+- `tsc --noEmit`: exit code 0
+- `next build`: exit code 0, 16 pages
+- `next lint`: exit code 0 (pre-existing `<img>` warnings in untouched files only)
