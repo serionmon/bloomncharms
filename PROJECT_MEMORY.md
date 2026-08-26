@@ -7,7 +7,7 @@
 
 ## CURRENT MILESTONE
 
-**Milestone 12 — Reverse Proxy (Caddy)**  
+**Milestone 13 — Production Hardening**  
 Status: ⬜ Not started
 
 ---
@@ -27,8 +27,32 @@ Status: ⬜ Not started
 | 9 | Payments (Razorpay) | ✅ Complete (Implemented — live/test credential verification pending) |
 | 10 | Email (Resend) | ✅ Complete (Implemented — live delivery verification pending) |
 | 11 | Shipping (Shiprocket) | ✅ Complete (Implemented — live courier verification pending) |
-| 12 | Reverse Proxy (Caddy) | ⬜ Not started |
+| 12 | Reverse Proxy (Caddy) | ✅ Complete (Configuration prepared — live domain verification pending) |
 | 13 | Production Hardening | ⬜ Not started |
+
+---
+
+## MILESTONE 12 — COMPLETE: Reverse Proxy (Caddy) & Production Architecture
+
+### Production Topology & Architecture
+- **Reverse Proxy**: Caddy 2 (`Caddyfile` & `deploy/Caddyfile`)
+  - Automatic HTTPS / TLS termination, HTTP $\to$ HTTPS redirection, Zstd/Gzip compression.
+  - Route `/api/*` proxies to Fastify backend on port 4000 (`header_up X-Forwarded-*`).
+  - Route `/*` proxies to Next.js standalone on port 3000.
+  - Private backend port 4000 is never exposed publicly.
+- **Frontend API Base Resolution** (`frontend/lib/api.ts`):
+  - In browser runtime, requests use same-origin relative `/api/*` when not overridden, eliminating hardcoded hostnames.
+  - In server-side rendering (SSR), falls back to `http://localhost:4000`.
+- **Fastify Production Hardening** (`backend/src/app.ts` & `backend/src/server.ts`):
+  - `trustProxy: true`: Preserves client IPs through Caddy reverse proxy headers.
+  - `@fastify/helmet`: Injects production security headers (`Cross-Origin-Resource-Policy: cross-origin`, `X-Content-Type-Options: nosniff`).
+  - `@fastify/rate-limit`: Global budget of 120 req/min with allowlist exemptions for health checks and provider webhooks.
+  - CORS: Allows configured `FRONTEND_URL` and same-origin requests; rejects unauthorized third-party cross-origin requests.
+  - Graceful Shutdown: `SIGINT` / `SIGTERM` handlers cleanly close Fastify connections.
+- **Containerization**:
+  - `backend/Dockerfile`: Multi-stage Alpine build running as non-root `node` user with health check.
+  - `frontend/Dockerfile`: Multi-stage standalone Next.js build running as non-root `node` user.
+  - `docker-compose.yml`: Multi-container production composition with health checks and restart policies.
 
 ---
 

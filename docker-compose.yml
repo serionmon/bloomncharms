@@ -1,0 +1,65 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=4000
+      - FRONTEND_URL=https://bloomncharms.com
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}
+      - STORE_ADMIN_EMAIL=${STORE_ADMIN_EMAIL}
+      - SHIPROCKET_EMAIL=${SHIPROCKET_EMAIL}
+      - SHIPROCKET_PASSWORD=${SHIPROCKET_PASSWORD}
+      - SHIPROCKET_WEBHOOK_SECRET=${SHIPROCKET_WEBHOOK_SECRET}
+    networks:
+      - bloomncharms-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_RAZORPAY_KEY_ID=${NEXT_PUBLIC_RAZORPAY_KEY_ID}
+    networks:
+      - bloomncharms-net
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - SITE_DOMAIN=bloomncharms.com
+      - ACME_EMAIL=concierge@bloomncharms.com
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - bloomncharms-net
+
+networks:
+  bloomncharms-net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

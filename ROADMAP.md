@@ -24,9 +24,9 @@ See PROJECT_MEMORY.md for current milestone status.
 - Milestone 10: Email (Resend) (✅ Complete — Live verification pending)
 - Milestone 11: Shipping (Shiprocket) (✅ Complete — Live verification pending)
 
-## Phase 4 — Production (🔄 Next Phase)
-- Milestone 12: Reverse proxy (Caddy) (⬜ Next)
-- Milestone 13: Production hardening (Sentry, Analytics, security headers)
+## Phase 4 — Production (🔄 In Progress)
+- Milestone 12: Reverse proxy (Caddy) (✅ Complete — Live domain verification pending)
+- Milestone 13: Production hardening (Sentry, Analytics, security headers) (⬜ Next)
 
 ## Deployment
 - Frontend: Vercel

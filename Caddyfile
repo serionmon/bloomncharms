@@ -1,0 +1,60 @@
+# ==============================================================================
+# Bloomncharms — Production Caddy Configuration
+# ==============================================================================
+
+{
+    # General Options
+    email concierge@bloomncharms.com
+}
+
+# Redirect www to apex domain
+www.bloomncharms.com {
+    redir https://bloomncharms.com{uri} permanent
+}
+
+# Primary Production Domain
+bloomncharms.com, {$SITE_DOMAIN:localhost} {
+    # Enable Gzip and Zstandard Compression
+    encode zstd gzip
+
+    # Production Security Headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
+    # API Route Handling -> Fastify Backend (Port 4000)
+    handle /api/* {
+        reverse_proxy {$BACKEND_HOST:localhost:4000} {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+
+    # Frontend Route Handling -> Next.js Standalone (Port 3000)
+    handle {
+        reverse_proxy {$FRONTEND_HOST:localhost:3000} {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+        }
+    }
+
+    # Structured JSON Logging
+    log {
+        output file /var/log/caddy/bloomncharms_access.log {
+            roll_size 20mb
+            roll_keep 5
+        }
+        format json
+    }
+}

@@ -1,5 +1,29 @@
 # Bloomncharms — Changelog
 
+## [0.12.0] — 2026-08-26 — Production Reverse Proxy & Deployment Architecture (Milestone 12)
+
+### Added
+
+#### Reverse Proxy & Production Topology
+- `Caddyfile` & `deploy/Caddyfile`:
+  - Reverse proxy configuration with automatic HTTPS, HTTP $\to$ HTTPS redirection, and Zstandard/Gzip compression.
+  - Same-origin reverse proxy routing: `/api/*` $\to$ backend port 4000; `/*` $\to$ frontend port 3000.
+  - Production security headers: HSTS, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Permissions-Policy`.
+  - Client IP and protocol preservation through `X-Forwarded-*` headers.
+- **Frontend API Base Resolution** (`frontend/lib/api.ts`):
+  - In browser runtime, requests use same-origin relative `/api/*` when `NEXT_PUBLIC_API_URL` is omitted, eliminating hardcoded URLs.
+- **Fastify Production Hardening** (`backend/src/app.ts`):
+  - `trustProxy: true` for accurate IP detection behind Caddy.
+  - `@fastify/helmet` for secure response headers.
+  - `@fastify/rate-limit` for rate limiting (120 req/min) with allowlist exemptions for health checks and payment/shipping webhooks.
+  - Strict CORS origin validation rejecting unauthorized third-party cross-origin requests.
+- **Containerization & Deployment**:
+  - `backend/Dockerfile`: Multi-stage Alpine container running as non-root `node` user with health check.
+  - `frontend/Dockerfile`: Multi-stage standalone Next.js container.
+  - `docker-compose.yml`: Multi-container production orchestration for backend, frontend, and Caddy.
+
+---
+
 ## [0.11.0] — 2026-08-26 — Shipping Infrastructure with Shiprocket (Milestone 11)
 
 ### Added
