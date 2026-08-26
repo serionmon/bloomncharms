@@ -1,5 +1,7 @@
+import './types/fastify.js';
 import { buildApp } from './app.js';
 import { config } from './common/config.js';
+
 
 async function startServer() {
   const app = await buildApp();

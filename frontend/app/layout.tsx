@@ -5,6 +5,7 @@ import Footer from '@/components/layout/Footer';
 import { CartProvider } from '@/components/commerce/CartProvider';
 import CartDrawer from '@/components/commerce/CartDrawer';
 import CartToast from '@/components/commerce/CartToast';
+import { AuthProvider } from '@/components/auth/AuthProvider';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://bloomncharms.com'),
@@ -84,16 +85,19 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-background font-body text-on-background antialiased flex flex-col min-h-screen">
-        <CartProvider>
-          <Header />
-          <main className="w-full pt-16 min-h-screen flex-1">
-            {children}
-          </main>
-          <Footer />
-          <CartDrawer />
-          <CartToast />
-        </CartProvider>
+        <AuthProvider>
+          <CartProvider>
+            <Header />
+            <main className="w-full pt-16 min-h-screen flex-1">
+              {children}
+            </main>
+            <Footer />
+            <CartDrawer />
+            <CartToast />
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );
 }
+

@@ -5,12 +5,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import BrandLogo from '@/components/brand/BrandLogo';
 import { useCart } from '@/components/commerce/CartProvider';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export default function Header() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { openDrawer, getItemCount } = useCart();
+  const { user } = useAuth();
   const totalCount = getItemCount();
+
 
   const navLinks = [
     { name: 'Home', href: '/' },
@@ -69,14 +72,17 @@ export default function Header() {
             <span className="material-symbols-outlined text-[20px]">search</span>
           </Link>
 
-          {/* Account Link */}
+          {/* Account Link — auth-aware */}
           <Link
-            href="/account"
-            aria-label="Customer Account"
+            href={user ? '/account' : '/account/sign-in'}
+            aria-label={user ? 'My Account' : 'Sign In'}
             className="p-xs text-on-surface hover:text-primary transition-colors flex items-center"
           >
-            <span className="material-symbols-outlined text-[20px]">person</span>
+            <span className={`material-symbols-outlined text-[20px] ${user ? 'text-primary' : ''}`}>
+              {user ? 'account_circle' : 'person'}
+            </span>
           </Link>
+
 
           {/* Cart Bag Icon & Counter */}
           <button
@@ -127,12 +133,12 @@ export default function Header() {
           <div className="border-t border-border pt-sm mt-xs flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <Link
-                href="/account"
+                href={user ? '/account' : '/account/sign-in'}
                 onClick={() => setMobileMenuOpen(false)}
                 className="font-label-sm text-primary uppercase text-xs flex items-center gap-1 font-semibold"
               >
                 <span className="material-symbols-outlined text-[16px]">account_circle</span>
-                Sign In / Register
+                {user ? 'My Account' : 'Sign In / Register'}
               </Link>
               <Link
                 href="/track-order"

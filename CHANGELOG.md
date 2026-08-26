@@ -1,5 +1,55 @@
 # Bloomncharms — Changelog
 
+## [0.3.0] — 2026-08-26 — Supabase Auth + RLS (Milestone 3)
+
+### Added
+
+#### Frontend — Supabase SSR Client Architecture
+- `frontend/lib/supabase/client.ts`: Browser client using `createBrowserClient` from `@supabase/ssr`.
+- `frontend/lib/supabase/server.ts`: Server client using `createServerClient` with Next.js 15 `cookies()` API.
+- `frontend/lib/supabase/middleware.ts`: Session refresh helper + auth redirect logic.
+- `frontend/lib/supabase/types.ts`: Typed `Database` interface mirroring the Supabase schema.
+- `frontend/middleware.ts`: Next.js middleware refreshing session on every request; redirects `/account` to `/account/sign-in` if unauthenticated.
+
+#### Frontend — Auth Context
+- `frontend/components/auth/AuthProvider.tsx`: React context providing `user`, `session`, `loading`, `signOut` via `onAuthStateChange`.
+
+#### Frontend — Account Pages
+- `/account/sign-in`: Real sign-in (React Hook Form + Zod, `signInWithPassword`, loading/error states, redirect on success).
+- `/account/create`: Real sign-up (first name, last name, email, password w/ strength rules, confirm, email confirmation success screen).
+- `/account/forgot-password`: `resetPasswordForEmail` flow with sent confirmation screen.
+- `/account/reset-password`: `PASSWORD_RECOVERY` event listener + `updateUser({ password })`.
+- `/account` (dashboard): Server-side auth guard (double-checks session via server Supabase client), profile panel with name/email/member since, orders placeholder, sign-out button.
+
+#### Frontend — Layout & Header
+- `frontend/app/layout.tsx`: Wrapped with `AuthProvider` (outermost provider).
+- `frontend/components/layout/Header.tsx`: Auth-aware account icon — filled `account_circle` icon in primary color when signed in; `person` icon when unauthenticated.
+
+#### Backend — Auth Layer
+- `backend/src/types/fastify.d.ts`: Fastify module augmentation adding `request.user?: { id, email, role }`.
+- `backend/src/auth/plugin.ts`: `authenticate` preHandler — reads `Authorization: Bearer <token>`, verifies via `supabase.auth.getUser(token)`, fetches role from `profiles`, sets `request.user`. Never trusts client-supplied identity.
+- `backend/src/auth/routes.ts`: `GET /api/auth/me` → 401 unauthenticated / `200 { user: { id, email, role } }` authenticated.
+- `backend/src/scripts/test-auth.ts`: Automated verification script for tests G–K (RLS isolation, role escalation block, /me endpoint).
+
+#### Database
+- `supabase/migrations/20260826000001_rls_hardening.sql`: Idempotent migration re-affirming all RLS policies with `IF NOT EXISTS` guards, and `CREATE OR REPLACE` for all `SECURITY DEFINER` functions (`handle_new_user`, `protect_profile_role`, `is_admin`, `handle_updated_at`).
+
+### Packages Added (Frontend)
+- `@supabase/supabase-js` ^2.x
+- `@supabase/ssr` ^0.x
+- `react-hook-form` ^7.x
+- `zod` ^3.x
+- `@hookform/resolvers` ^3.x
+
+### Verified
+- Backend typecheck: 0 errors. Backend build: Clean.
+- Frontend typecheck: 0 errors. Frontend build: 20 pages (5 new auth routes).
+- RLS: customer can only read own profile/addresses/orders; cross-user access blocked.
+- Role trigger: `UPDATE profiles SET role = 'admin'` rejected for non-admins.
+- `/api/auth/me`: 401 without token, 200 with valid token.
+
+---
+
 ## [0.2.0] — 2026-08-26 — Backend Catalog API & Storefront Integration
 
 ### Added

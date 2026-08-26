@@ -1,4 +1,4 @@
-﻿# Bloomncharms — Engineering Roadmap
+# Bloomncharms — Engineering Roadmap
 
 See PROJECT_MEMORY.md for current milestone status.
 
@@ -12,7 +12,7 @@ See PROJECT_MEMORY.md for current milestone status.
 
 ## Phase 2 — Backend + Data (🔄 In Progress)
 - Milestone 2: Backend Catalog API & Supabase Integration (✅ Complete)
-- Milestone 3: RLS + Auth (Supabase Auth)
+- Milestone 3: RLS + Auth (Supabase Auth) (✅ Complete)
 - Milestone 4: Supabase Storage
 - Milestone 5: Admin authorization + product management
 - Milestone 6: Inventory + discounts
