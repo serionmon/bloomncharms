@@ -59,6 +59,29 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith(route)
   );
 
+  // Protect /admin routes — enforce authenticated admin role
+  if (pathname.startsWith('/admin')) {
+    if (!user) {
+      const signInUrl = request.nextUrl.clone();
+      signInUrl.pathname = '/account/sign-in';
+      signInUrl.searchParams.set('next', pathname);
+      return NextResponse.redirect(signInUrl);
+    }
+
+    // Authoritatively check role from profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profile?.role !== 'admin') {
+      const forbiddenUrl = request.nextUrl.clone();
+      forbiddenUrl.pathname = '/403';
+      return NextResponse.redirect(forbiddenUrl);
+    }
+  }
+
   // Protect /account — redirect unauthenticated users to sign-in.
   if (!user && pathname.startsWith('/account') && !isPublicAuthRoute) {
     const signInUrl = request.nextUrl.clone();

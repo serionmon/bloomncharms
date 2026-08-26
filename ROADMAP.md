@@ -15,7 +15,7 @@ See PROJECT_MEMORY.md for current milestone status.
 - Milestone 3: RLS + Auth (Supabase Auth) (✅ Complete)
 - Milestone 4: Supabase Storage (✅ Complete)
 - Milestone 5: Admin authorization + product management (✅ Complete)
-- Milestone 6: Inventory + discounts
+- Milestone 6: Inventory + discounts (✅ Complete)
 - Milestone 7: Customer accounts
 
 ## Phase 3 — Commerce (⬜ Future)

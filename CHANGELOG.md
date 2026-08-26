@@ -1,6 +1,49 @@
 # Bloomncharms — Changelog
 
-## [0.5.1] — 2026-08-26 — Admin DELETE Corrected to Soft-Delete
+## [0.6.0] — 2026-08-26 — Inventory & Discount Infrastructure (Milestone 6)
+
+### Added
+
+#### Backend Inventory & Stock Derivation
+- `InventoryService` (`backend/src/inventory/service.ts`):
+  - `listInventory()`: Returns inventory joined with product details and derived status (`IN_STOCK`, `LOW_STOCK`, `OUT_OF_STOCK`).
+  - `getProductInventory()`: Single product inventory.
+  - `updateProductInventory()`: Non-negative stock quantity & threshold updates.
+  - `getPublicStock()`: Public-safe stock check without leaking internal counts.
+  - `checkCartAvailability()`: Bulk item availability check.
+- Inventory Validation (`backend/src/inventory/validation.ts`): Zod schemas and status derivation helpers.
+- Admin Inventory Routes: `GET /api/admin/inventory`, `GET /api/admin/products/:id/inventory`, `PATCH /api/admin/products/:id/inventory`.
+- Public Inventory Routes: `GET /api/inventory/:productId`, `POST /api/inventory/check`.
+
+#### Backend Discounts & Server-Side Validation
+- `DiscountService` (`backend/src/discounts/service.ts`):
+  - `listDiscounts()`: Admin promotional campaign listing with usage counts.
+  - `createDiscount()`: Code uniqueness check (409 Conflict), percentage / fixed validation, start/end dates, caps.
+  - `updateDiscount()`: Partial update with uniqueness guards.
+  - `deactivateDiscount()`: Soft-deactivation (`is_active = false`).
+  - `validateDiscountCode()`: Authoritative validation checking minimum order, expiration, usage limits, percentage/fixed calculations, and maximum discount caps.
+- Discount Validation (`backend/src/discounts/validation.ts`): Zod schemas for campaigns and checkout coupon validation.
+- Admin Discount Routes: `GET`, `POST`, `PATCH`, `DELETE` at `/api/admin/discounts`.
+- Public Discount Route: `POST /api/discounts/validate`.
+
+#### Frontend Admin Dashboard & Checkout
+- `frontend/app/admin/layout.tsx`: Console layout and subheader navigation.
+- `frontend/app/admin/inventory/page.tsx`: Inventory management dashboard with inline stock editor, threshold controls, status badges, and search filter.
+- `frontend/app/admin/discounts/page.tsx`: Discount campaigns management dashboard with modal creation form and active toggle.
+- `frontend/app/checkout/page.tsx`: Integrated coupon code input with loading state, error/success banners, remove action, and live discount calculations.
+- `frontend/lib/api.ts`: Added `validateDiscount` and `checkProductStock` client functions.
+
+#### Test Suite
+- `backend/src/scripts/test-inventory-discounts.ts`: 17 automated checks covering admin authentication, customer authorization, stock status derivation, negative stock rejection, discount calculations, maximum caps, and public validation endpoints.
+
+### Verified
+- Backend typecheck: 0 errors
+- Backend build: Clean build to `dist/`
+- Frontend typecheck: 0 errors
+- Frontend build: All 22 Next.js App Router routes compiled cleanly
+
+---
+
 
 ### Changed
 

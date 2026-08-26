@@ -2,6 +2,8 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { requireAdmin } from '../auth/plugin.js';
 import { StorageService } from '../storage/service.js';
 import { AdminProductService } from './service.js';
+import { InventoryService } from '../inventory/service.js';
+import { DiscountService } from '../discounts/service.js';
 import {
   productIdParamSchema,
   productImageParamsSchema,
@@ -11,6 +13,12 @@ import {
   createProductSchema,
   updateProductSchema,
 } from './validation.js';
+import { updateInventorySchema } from '../inventory/validation.js';
+import {
+  createDiscountSchema,
+  updateDiscountSchema,
+  discountParamSchema,
+} from '../discounts/validation.js';
 
 export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // =========================================================================
@@ -175,9 +183,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
    * Deactivates (soft-deletes) a product by setting is_active = false.
    *
    * Hard physical deletion is intentionally NOT available via the API because
-   * existing order_items reference product IDs.  Deactivation removes the product
+   * existing order_items reference product IDs. Deactivation removes the product
    * from the storefront while keeping historical order data intact.
-   * Images are preserved so a reactivation restores the full product.
    */
   fastify.delete('/products/:id', { preHandler: requireAdmin }, async (request, reply) => {
     const paramResult = productIdParamSchema.safeParse(request.params);
@@ -211,8 +218,6 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
   /**
    * POST /api/admin/products/:id/images
-   * Uploads and attaches an image to a product.
-   * Supports multipart/form-data as well as application/json (base64).
    */
   fastify.post('/products/:id/images', { preHandler: requireAdmin }, async (request, reply) => {
     const paramResult = productIdParamSchema.safeParse(request.params);
@@ -296,7 +301,6 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
   /**
    * PATCH /api/admin/products/:id/images/:imageId
-   * Updates metadata (altText, sortOrder) of an attached product image.
    */
   fastify.patch('/products/:id/images/:imageId', { preHandler: requireAdmin }, async (request, reply) => {
     const paramResult = productImageParamsSchema.safeParse(request.params);
@@ -338,7 +342,6 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
   /**
    * DELETE /api/admin/products/:id/images/:imageId
-   * Removes a product image from storage and deletes the database record.
    */
   fastify.delete('/products/:id/images/:imageId', { preHandler: requireAdmin }, async (request, reply) => {
     const paramResult = productImageParamsSchema.safeParse(request.params);
@@ -370,7 +373,267 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
   });
 
   // =========================================================================
-  // Stubs for future milestones (Milestone 6+)
+  // Inventory Management Endpoints (Milestone 6)
+  // Protected by authenticate + requireAdmin
+  // =========================================================================
+
+  /**
+   * GET /api/admin/inventory
+   * Lists all product inventory rows with calculated stock status badges.
+   */
+  fastify.get('/inventory', { preHandler: requireAdmin }, async (request, reply) => {
+    const query = request.query as { status?: string; search?: string };
+    try {
+      const inventory = await InventoryService.listInventory(query);
+      return reply.status(200).send({
+        inventory,
+        total: inventory.length,
+      });
+    } catch (err: any) {
+      return reply.status(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: err.message || 'Failed to list inventory.',
+      });
+    }
+  });
+
+  /**
+   * GET /api/admin/products/:id/inventory
+   * Gets inventory status for a specific product.
+   */
+  fastify.get('/products/:id/inventory', { preHandler: requireAdmin }, async (request, reply) => {
+    const paramResult = productIdParamSchema.safeParse(request.params);
+    if (!paramResult.success) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: paramResult.error.errors[0]?.message || 'Invalid product ID.',
+      });
+    }
+
+    try {
+      const item = await InventoryService.getProductInventory(paramResult.data.id);
+      if (!item) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: `Inventory record for product '${paramResult.data.id}' not found.`,
+        });
+      }
+
+      return reply.status(200).send({ inventory: item });
+    } catch (err: any) {
+      return reply.status(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: err.message || 'Failed to get product inventory.',
+      });
+    }
+  });
+
+  /**
+   * PATCH /api/admin/products/:id/inventory
+   * Updates stock quantity or low-stock threshold for a product.
+   */
+  fastify.patch('/products/:id/inventory', { preHandler: requireAdmin }, async (request, reply) => {
+    const paramResult = productIdParamSchema.safeParse(request.params);
+    if (!paramResult.success) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: paramResult.error.errors[0]?.message || 'Invalid product ID.',
+      });
+    }
+
+    const bodyResult = updateInventorySchema.safeParse(request.body);
+    if (!bodyResult.success) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: bodyResult.error.errors[0]?.message || 'Invalid inventory update payload.',
+        errors: bodyResult.error.errors,
+      });
+    }
+
+    try {
+      const updated = await InventoryService.updateProductInventory(
+        paramResult.data.id,
+        bodyResult.data
+      );
+
+      return reply.status(200).send({
+        inventory: updated,
+        message: 'Product inventory updated successfully.',
+      });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 400).send({
+        statusCode: err.statusCode || 400,
+        error: err.statusCode === 404 ? 'Not Found' : 'Bad Request',
+        message: err.message || 'Failed to update product inventory.',
+      });
+    }
+  });
+
+  // =========================================================================
+  // Discount Management Endpoints (Milestone 6)
+  // Protected by authenticate + requireAdmin
+  // =========================================================================
+
+  /**
+   * GET /api/admin/discounts
+   * Lists all discount campaigns with usage analytics.
+   */
+  fastify.get('/discounts', { preHandler: requireAdmin }, async (_request, reply) => {
+    try {
+      const discounts = await DiscountService.listDiscounts();
+      return reply.status(200).send({
+        discounts,
+        total: discounts.length,
+      });
+    } catch (err: any) {
+      return reply.status(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: err.message || 'Failed to list discounts.',
+      });
+    }
+  });
+
+  /**
+   * GET /api/admin/discounts/:id
+   * Gets single discount details.
+   */
+  fastify.get('/discounts/:id', { preHandler: requireAdmin }, async (request, reply) => {
+    const paramResult = discountParamSchema.safeParse(request.params);
+    if (!paramResult.success) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: paramResult.error.errors[0]?.message || 'Invalid discount ID.',
+      });
+    }
+
+    try {
+      const discount = await DiscountService.getDiscountById(paramResult.data.id);
+      if (!discount) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: 'Not Found',
+          message: `Discount with ID '${paramResult.data.id}' not found.`,
+        });
+      }
+
+      return reply.status(200).send({ discount });
+    } catch (err: any) {
+      return reply.status(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: err.message || 'Failed to get discount.',
+      });
+    }
+  });
+
+  /**
+   * POST /api/admin/discounts
+   * Creates a new discount campaign.
+   */
+  fastify.post('/discounts', { preHandler: requireAdmin }, async (request, reply) => {
+    const bodyResult = createDiscountSchema.safeParse(request.body);
+    if (!bodyResult.success) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: bodyResult.error.errors[0]?.message || 'Invalid discount payload.',
+        errors: bodyResult.error.errors,
+      });
+    }
+
+    try {
+      const discount = await DiscountService.createDiscount(bodyResult.data);
+      return reply.status(201).send({
+        discount,
+        message: 'Discount campaign created successfully.',
+      });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 400).send({
+        statusCode: err.statusCode || 400,
+        error: err.statusCode === 409 ? 'Conflict' : 'Bad Request',
+        message: err.message || 'Failed to create discount.',
+      });
+    }
+  });
+
+  /**
+   * PATCH /api/admin/discounts/:id
+   * Updates an existing discount campaign.
+   */
+  fastify.patch('/discounts/:id', { preHandler: requireAdmin }, async (request, reply) => {
+    const paramResult = discountParamSchema.safeParse(request.params);
+    if (!paramResult.success) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: paramResult.error.errors[0]?.message || 'Invalid discount ID.',
+      });
+    }
+
+    const bodyResult = updateDiscountSchema.safeParse(request.body);
+    if (!bodyResult.success) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: bodyResult.error.errors[0]?.message || 'Invalid update payload.',
+        errors: bodyResult.error.errors,
+      });
+    }
+
+    try {
+      const updated = await DiscountService.updateDiscount(paramResult.data.id, bodyResult.data);
+      return reply.status(200).send({
+        discount: updated,
+        message: 'Discount updated successfully.',
+      });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 400).send({
+        statusCode: err.statusCode || 400,
+        error: err.statusCode === 404 ? 'Not Found' : err.statusCode === 409 ? 'Conflict' : 'Bad Request',
+        message: err.message || 'Failed to update discount.',
+      });
+    }
+  });
+
+  /**
+   * DELETE /api/admin/discounts/:id
+   * Soft-deactivates discount campaign (sets is_active = false).
+   */
+  fastify.delete('/discounts/:id', { preHandler: requireAdmin }, async (request, reply) => {
+    const paramResult = discountParamSchema.safeParse(request.params);
+    if (!paramResult.success) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: paramResult.error.errors[0]?.message || 'Invalid discount ID.',
+      });
+    }
+
+    try {
+      const deactivated = await DiscountService.deactivateDiscount(paramResult.data.id);
+      return reply.status(200).send({
+        discount: deactivated,
+        message: 'Discount campaign deactivated successfully.',
+      });
+    } catch (err: any) {
+      return reply.status(err.statusCode || 400).send({
+        statusCode: err.statusCode || 400,
+        error: err.statusCode === 404 ? 'Not Found' : 'Bad Request',
+        message: err.message || 'Failed to deactivate discount.',
+      });
+    }
+  });
+
+  // =========================================================================
+  // Stubs for future milestones (Milestone 8+)
   // =========================================================================
 
   fastify.get('/orders', async (_request, reply) => {
@@ -379,9 +642,5 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
   fastify.put('/orders/:id/status', async (_request, reply) => {
     return reply.status(501).send({ message: 'Admin order status update foundation prepared.' });
-  });
-
-  fastify.get('/inventory', async (_request, reply) => {
-    return reply.status(501).send({ message: 'Admin inventory management foundation prepared.' });
   });
 };

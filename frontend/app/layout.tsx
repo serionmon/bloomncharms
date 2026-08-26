@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { EB_Garamond, Inter } from 'next/font/google';
 import './globals.css';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -6,6 +7,18 @@ import { CartProvider } from '@/components/commerce/CartProvider';
 import CartDrawer from '@/components/commerce/CartDrawer';
 import CartToast from '@/components/commerce/CartToast';
 import { AuthProvider } from '@/components/auth/AuthProvider';
+
+const garamond = EB_Garamond({
+  subsets: ['latin'],
+  variable: '--font-garamond',
+  display: 'swap',
+});
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://bloomncharms.com'),
@@ -75,7 +88,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${garamond.variable} ${inter.variable}`}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

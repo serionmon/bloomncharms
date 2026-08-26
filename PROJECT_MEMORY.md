@@ -7,7 +7,7 @@
 
 ## CURRENT MILESTONE
 
-**Milestone 6 — Inventory + Discounts**  
+**Milestone 7 — Customer Accounts**  
 Status: ⬜ Not started
 
 ---
@@ -21,7 +21,7 @@ Status: ⬜ Not started
 | 3 | Row Level Security + Auth | ✅ Complete |
 | 4 | Supabase Storage | ✅ Complete |
 | 5 | Admin Authorization + Products | ✅ Complete |
-| 6 | Inventory + Discounts | ⬜ Not started |
+| 6 | Inventory + Discounts | ✅ Complete |
 | 7 | Customer Accounts | ⬜ Not started |
 | 8 | Orders | ⬜ Not started |
 | 9 | Payments (Razorpay) | ⬜ Not started |
@@ -29,6 +29,50 @@ Status: ⬜ Not started
 | 11 | Shipping (Shiprocket) | ⬜ Not started |
 | 12 | Reverse Proxy (Caddy) | ⬜ Not started |
 | 13 | Production Hardening | ⬜ Not started |
+
+---
+
+## MILESTONE 6 — COMPLETE: Inventory + Discounts
+
+### Inventory Architecture & Security
+- `InventoryService` (`backend/src/inventory/service.ts`):
+  - `listInventory()`: Returns product inventory with calculated stock statuses (`IN_STOCK`, `LOW_STOCK`, `OUT_OF_STOCK`).
+  - `getProductInventory(productId)`: Single product inventory.
+  - `updateProductInventory(productId, { stockQuantity, lowStockThreshold })`: Atomic non-negative inventory updates.
+  - `getPublicStock(productId)`: Public-safe stock status without leaking internal warehouse counts.
+  - `checkCartAvailability(items)`: Bulk cart check prior to checkout.
+- Validation (`backend/src/inventory/validation.ts`): Zod schemas enforcing `stockQuantity >= 0` and `lowStockThreshold >= 0`.
+- Admin Endpoints:
+  - `GET /api/admin/inventory`
+  - `GET /api/admin/products/:id/inventory`
+  - `PATCH /api/admin/products/:id/inventory`
+- Public Endpoints:
+  - `GET /api/inventory/:productId`
+  - `POST /api/inventory/check`
+
+### Discounts Architecture & Security
+- `DiscountService` (`backend/src/discounts/service.ts`):
+  - `listDiscounts()`: Admin view of all promotional campaigns and usage analytics.
+  - `createDiscount(input)`: Validates uppercase code uniqueness (409 Conflict), percentage / fixed amount constraints, dates, and caps.
+  - `updateDiscount(id, input)`: Partial updates with code uniqueness protection.
+  - `deactivateDiscount(id)`: Soft-deactivation (`is_active = false`).
+  - `validateDiscountCode(code, subtotal, userId)`: Authoritative server calculation, checking active status, start/expiration dates, minimum order subtotal, global usage limits, and per-customer limits.
+- RLS Policy: `discounts` table has zero public SELECT access (Admin all). Customers validate codes exclusively through the backend API.
+- Admin Endpoints:
+  - `GET /api/admin/discounts`
+  - `POST /api/admin/discounts`
+  - `GET /api/admin/discounts/:id`
+  - `PATCH /api/admin/discounts/:id`
+  - `DELETE /api/admin/discounts/:id` (Soft-deactivates)
+- Public Endpoint:
+  - `POST /api/discounts/validate`
+
+### Frontend & Checkout Integration
+- `frontend/app/checkout/page.tsx`: Connected coupon input to `POST /api/discounts/validate` with loading state, applied badge, remove button, and clear validation feedback.
+- `frontend/app/admin/layout.tsx`: Admin management console header and navigation.
+- `frontend/app/admin/inventory/page.tsx`: Full inventory management dashboard with live stock editor, threshold controls, status badges, and search.
+- `frontend/app/admin/discounts/page.tsx`: Discount campaigns management dashboard with modal creation form and activate/deactivate toggles.
+
 
 ---
 

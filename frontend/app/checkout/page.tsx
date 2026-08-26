@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useCart } from '@/components/commerce/CartProvider';
 import OrderSuccessModal from '@/components/commerce/OrderSuccessModal';
 import PaymentSelector, { PaymentMethodType } from '@/components/commerce/PaymentSelector';
+import { validateDiscount } from '@/lib/api';
 
 interface FormData {
   firstName: string;
@@ -36,6 +37,12 @@ export default function CheckoutPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('full_online');
 
+  // Coupon state
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null);
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [couponMessage, setCouponMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
@@ -56,10 +63,58 @@ export default function CheckoutPage() {
 
   // Financial calculations
   const subtotal = getSubtotal();
-  const onlineDiscount = paymentMethod === 'full_online' ? Math.round(subtotal * 0.1) : 0;
-  const total = subtotal - onlineDiscount;
-  const payNowAmount = paymentMethod === 'full_online' ? total : Math.round(subtotal * 0.5);
-  const codAmount = paymentMethod === 'hybrid' ? subtotal - payNowAmount : 0;
+  const couponDiscount = appliedCoupon ? appliedCoupon.discountAmount : 0;
+  const subtotalAfterCoupon = Math.max(0, subtotal - couponDiscount);
+  const onlineDiscount = paymentMethod === 'full_online' ? Math.round(subtotalAfterCoupon * 0.1) : 0;
+  const total = subtotalAfterCoupon - onlineDiscount;
+  const payNowAmount = paymentMethod === 'full_online' ? total : Math.round(total * 0.5);
+  const codAmount = paymentMethod === 'hybrid' ? total - payNowAmount : 0;
+
+  const handleApplyCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = couponCode.trim();
+    if (!trimmed) {
+      setCouponMessage({ type: 'error', text: 'Please enter a coupon code.' });
+      return;
+    }
+
+    setIsValidatingCoupon(true);
+    setCouponMessage(null);
+
+    try {
+      const res = await validateDiscount(trimmed, subtotal);
+      if (res.valid && res.discountAmount > 0) {
+        setAppliedCoupon({
+          code: res.code || trimmed.toUpperCase(),
+          discountAmount: res.discountAmount,
+        });
+        setCouponMessage({
+          type: 'success',
+          text: `Coupon applied: Saved ₹${res.discountAmount.toLocaleString('en-IN')}`,
+        });
+        setCouponCode('');
+      } else {
+        setAppliedCoupon(null);
+        setCouponMessage({
+          type: 'error',
+          text: res.message || 'Invalid or expired coupon code.',
+        });
+      }
+    } catch {
+      setCouponMessage({
+        type: 'error',
+        text: 'Unable to validate coupon. Please try again.',
+      });
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponMessage(null);
+    setCouponCode('');
+  };
 
   const validateStep1 = (): boolean => {
     const newErrors: FormErrors = {};
@@ -683,12 +738,82 @@ export default function CheckoutPage() {
                   ))}
                 </div>
 
+                {/* Coupon Code Section */}
+                <div className="border-t border-border pt-md flex flex-col gap-xs">
+                  <label htmlFor="couponInput" className="font-label-sm text-[11px] uppercase tracking-wider text-on-surface-muted">
+                    Gift Card / Promo Code
+                  </label>
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded p-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-[18px]">verified</span>
+                        <div>
+                          <span className="font-label-sm font-bold text-xs text-primary uppercase tracking-wider block">
+                            {appliedCoupon.code}
+                          </span>
+                          <span className="font-body-md text-[11px] text-primary">
+                            −₹{appliedCoupon.discountAmount.toLocaleString('en-IN')} applied
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveCoupon}
+                        className="text-primary hover:text-primary-container p-1 text-xs uppercase font-label-sm tracking-wider cursor-pointer underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleApplyCoupon} className="flex gap-2">
+                      <input
+                        id="couponInput"
+                        type="text"
+                        value={couponCode}
+                        onChange={(e) => {
+                          setCouponCode(e.target.value.toUpperCase());
+                          if (couponMessage) setCouponMessage(null);
+                        }}
+                        placeholder="e.g. SUMMER20"
+                        className="flex-1 px-3 py-2 text-xs uppercase font-label-sm tracking-wider bg-surface border border-border rounded focus:outline-none focus:border-primary text-on-surface"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isValidatingCoupon || !couponCode.trim()}
+                        className="px-4 py-2 bg-secondary text-on-secondary rounded text-xs font-label-sm uppercase tracking-wider hover:bg-secondary-container transition-colors disabled:opacity-50 cursor-pointer shrink-0"
+                      >
+                        {isValidatingCoupon ? 'APPLYING...' : 'APPLY'}
+                      </button>
+                    </form>
+                  )}
+
+                  {couponMessage && !appliedCoupon && (
+                    <p
+                      className={`text-[11px] mt-1 ${
+                        couponMessage.type === 'success' ? 'text-secondary font-medium' : 'text-error'
+                      }`}
+                    >
+                      {couponMessage.text}
+                    </p>
+                  )}
+                </div>
+
                 {/* Totals Breakdown */}
                 <div className="border-t border-border pt-md flex flex-col gap-sm font-body-md text-sm">
                   <div className="flex justify-between text-on-surface-muted">
                     <span>Subtotal</span>
                     <span className="text-on-surface font-medium">₹{subtotal.toLocaleString('en-IN')}</span>
                   </div>
+
+                  {/* Coupon Discount if applied */}
+                  {appliedCoupon && appliedCoupon.discountAmount > 0 && (
+                    <div className="flex justify-between text-primary font-medium">
+                      <span className="flex items-center gap-1">
+                        <span>Coupon ({appliedCoupon.code})</span>
+                      </span>
+                      <span>−₹{appliedCoupon.discountAmount.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
 
                   {/* Online discount if 100% online selected */}
                   {onlineDiscount > 0 && (

@@ -1,4 +1,4 @@
-﻿import { Product, PRODUCTS, getProductBySlug as getStaticProductBySlug } from '@/content/products';
+import { Product, PRODUCTS, getProductBySlug as getStaticProductBySlug } from '@/content/products';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -195,4 +195,75 @@ export async function fetchCategories(): Promise<FetchCategoriesResponse> {
     categories: defaultCategories,
     fromFallback: true,
   };
+}
+
+export interface ValidateDiscountResponse {
+  valid: boolean;
+  discountAmount: number;
+  code?: string;
+  message: string;
+}
+
+/**
+ * Validate a discount coupon against current order subtotal.
+ */
+export async function validateDiscount(
+  code: string,
+  subtotal: number
+): Promise<ValidateDiscountResponse> {
+  const url = `${API_BASE_URL}/api/discounts/validate`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ code, subtotal }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (error) {
+    console.warn('[API Client] Discount validation error:', error);
+  }
+
+  return {
+    valid: false,
+    discountAmount: 0,
+    message: 'Unable to validate coupon at this time.',
+  };
+}
+
+export interface PublicStockResponse {
+  productId: string;
+  inStock: boolean;
+  status: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+  label: string;
+}
+
+/**
+ * Check stock status for a product.
+ */
+export async function checkProductStock(productId: string): Promise<PublicStockResponse | null> {
+  const url = `${API_BASE_URL}/api/inventory/${encodeURIComponent(productId)}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      next: { revalidate: 15 },
+    });
+
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (error) {
+    console.warn(`[API Client] Check stock error for ${productId}:`, error);
+  }
+
+  return null;
 }
