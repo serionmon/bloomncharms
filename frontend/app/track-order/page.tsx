@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { fetchShipmentTracking } from '@/lib/api';
+
 type DemoOrderItem = {
   name: string;
   quantity: number;
@@ -26,6 +28,9 @@ type DemoOrder = {
   items: DemoOrderItem[];
   deliveryAddress: DemoDeliveryAddress;
   total: number;
+  courierName?: string;
+  awbCode?: string;
+  trackingUrl?: string;
 };
 
 const DEMO_ORDER: DemoOrder = {
@@ -54,6 +59,9 @@ const DEMO_ORDER: DemoOrder = {
     pinCode: '560001',
   },
   total: 1598,
+  courierName: 'Shiprocket / Blue Dart',
+  awbCode: 'SR-DEMO-789012',
+  trackingUrl: 'https://shiprocket.co/tracking/SR-DEMO-789012',
 };
 
 export default function TrackOrderPage() {
@@ -62,19 +70,60 @@ export default function TrackOrderPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [foundOrder, setFoundOrder] = useState<DemoOrder | null>(null);
+  const [liveTracking, setLiveTracking] = useState<any>(null);
 
-
-
-  const handleTrack = (e: React.FormEvent) => {
+  const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSearching(true);
     setHasSearched(true);
 
-    window.setTimeout(() => {
-      const normalized = orderNumber.trim().toUpperCase();
-      setFoundOrder(normalized === DEMO_ORDER.orderNumber ? DEMO_ORDER : null);
-      setIsSearching(false);
-    }, 250);
+    const normalized = orderNumber.trim().toUpperCase();
+
+    try {
+      const trackingData = await fetchShipmentTracking(normalized);
+      if (trackingData && trackingData.orderNumber) {
+        setLiveTracking(trackingData);
+        setFoundOrder({
+          orderNumber: trackingData.orderNumber,
+          createdAt: trackingData.shippedAt || new Date().toISOString(),
+          status: trackingData.shippingStatus.toUpperCase(),
+          statusLabel:
+            trackingData.shippingStatus === 'delivered'
+              ? 'Delivered'
+              : trackingData.shippingStatus === 'out_for_delivery'
+              ? 'Out for Delivery'
+              : trackingData.shippingStatus === 'in_transit'
+              ? 'In Transit'
+              : 'Manifested / Ready for Courier',
+          customerName: 'Bloomncharms Customer',
+          items: [
+            {
+              name: 'Artisanal Floral Creation',
+              quantity: 1,
+              price: 1299,
+            },
+          ],
+          deliveryAddress: {
+            address: 'Verified Destination Address',
+            city: trackingData.destinationCity || 'Bengaluru',
+            state: trackingData.destinationState || 'Karnataka',
+            pinCode: '560001',
+          },
+          total: 1299,
+          courierName: trackingData.courierName,
+          awbCode: trackingData.awbCode,
+          trackingUrl: trackingData.trackingUrl,
+        });
+        setIsSearching(false);
+        return;
+      }
+    } catch {
+      // Fallback to local demo lookup
+    }
+
+    setLiveTracking(null);
+    setFoundOrder(normalized === DEMO_ORDER.orderNumber ? DEMO_ORDER : null);
+    setIsSearching(false);
   };
 
   return (
@@ -277,6 +326,32 @@ export default function TrackOrderPage() {
                           {foundOrder.deliveryAddress.city}, {foundOrder.deliveryAddress.state} — {foundOrder.deliveryAddress.pinCode}
                         </p>
                       </div>
+
+                      {foundOrder.courierName && (
+                        <div className="bg-surface-container-low p-sm rounded border border-border">
+                          <h4 className="font-label-sm text-on-surface-muted uppercase text-[10px] mb-1">
+                            Courier Partner &amp; Tracking
+                          </h4>
+                          <p className="font-body-md text-on-surface font-medium text-xs">
+                            {foundOrder.courierName}
+                          </p>
+                          {foundOrder.awbCode && (
+                            <p className="font-mono text-xs text-on-surface-variant mt-0.5">
+                              AWB: {foundOrder.awbCode}
+                            </p>
+                          )}
+                          {foundOrder.trackingUrl && (
+                            <a
+                              href={foundOrder.trackingUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block mt-2 font-label-sm text-[11px] text-primary underline uppercase tracking-wider"
+                            >
+                              Live Courier Tracking &rarr;
+                            </a>
+                          )}
+                        </div>
+                      )}
 
                       <div className="flex justify-between items-baseline pt-sm border-t border-border">
                         <span className="font-label-sm text-xs uppercase text-on-surface">Total</span>

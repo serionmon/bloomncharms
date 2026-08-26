@@ -20,12 +20,12 @@ See PROJECT_MEMORY.md for current milestone status.
 
 ## Phase 3 — Commerce (🔄 In Progress)
 - Milestone 8: Orders (server-side cart validation, order creation) (✅ Complete)
-- Milestone 9: Payments (Razorpay — server-side only) (✅ Complete)
-- Milestone 10: Email (Resend)
-- Milestone 11: Shipping (Shiprocket)
+- Milestone 9: Payments (Razorpay — server-side only) (✅ Complete — Live verification pending)
+- Milestone 10: Email (Resend) (✅ Complete — Live verification pending)
+- Milestone 11: Shipping (Shiprocket) (✅ Complete — Live verification pending)
 
-## Phase 4 — Production (⬜ Future)
-- Milestone 12: Reverse proxy (Caddy)
+## Phase 4 — Production (🔄 Next Phase)
+- Milestone 12: Reverse proxy (Caddy) (⬜ Next)
 - Milestone 13: Production hardening (Sentry, Analytics, security headers)
 
 ## Deployment

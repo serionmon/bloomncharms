@@ -1,26 +1,37 @@
 'use client';
 
 import React from 'react';
+import {
+  calculatePaymentOption,
+  type PaymentMethodType,
+  type PaymentOptionCalculation,
+} from '@/lib/payment-calc';
 
-export type PaymentMethodType = 'full_online' | 'hybrid';
+export type { PaymentMethodType } from '@/lib/payment-calc';
 
 interface PaymentSelectorProps {
   selectedMethod: PaymentMethodType;
   onChange: (method: PaymentMethodType) => void;
   subtotal: number;
-  onlineDiscount: number;
-  payNowAmount: number;
-  codAmount: number;
+  couponDiscount?: number;
+  onlineCalculation?: PaymentOptionCalculation;
+  hybridCalculation?: PaymentOptionCalculation;
 }
 
 export default function PaymentSelector({
   selectedMethod,
   onChange,
   subtotal,
-  onlineDiscount,
-  payNowAmount,
-  codAmount,
+  couponDiscount = 0,
+  onlineCalculation,
+  hybridCalculation,
 }: PaymentSelectorProps) {
+  // Independent calculations for each payment option card
+  const onlineCalc =
+    onlineCalculation || calculatePaymentOption(subtotal, 'full_online', couponDiscount);
+  const hybridCalc =
+    hybridCalculation || calculatePaymentOption(subtotal, 'hybrid', couponDiscount);
+
   return (
     <div className="flex flex-col gap-md">
       {/* Option 1: PAY 100% ONLINE */}
@@ -60,27 +71,29 @@ export default function PaymentSelector({
           </div>
 
           <div className="text-right shrink-0">
-            <div className="font-headline-md text-lg text-primary">
-              ₹{(subtotal - onlineDiscount).toLocaleString('en-IN')}
+            <div className="font-headline-md text-lg text-primary font-bold">
+              ₹{onlineCalc.total.toLocaleString('en-IN')}
             </div>
-            {onlineDiscount > 0 && (
+            {onlineCalc.onlineDiscount > 0 && (
               <span className="font-label-sm text-[11px] text-on-surface-muted line-through block">
-                ₹{subtotal.toLocaleString('en-IN')}
+                ₹{onlineCalc.subtotalAfterCoupon.toLocaleString('en-IN')}
               </span>
             )}
           </div>
         </div>
 
-        {/* Breakdown preview pill */}
+        {/* Breakdown preview pill (Independent Online Calculation) */}
         <div className="mt-sm pt-sm border-t border-border/50 flex flex-wrap items-center justify-between text-xs text-on-surface-muted gap-2 font-body-md">
           <div className="flex items-center gap-xs text-secondary font-medium">
             <span className="material-symbols-outlined text-[16px] text-secondary">
               savings
             </span>
-            <span>You save ₹{onlineDiscount.toLocaleString('en-IN')} with 100% online payment</span>
+            <span>
+              You save ₹{onlineCalc.onlineDiscount.toLocaleString('en-IN')} with 100% online payment
+            </span>
           </div>
           <div className="font-label-sm uppercase tracking-wider text-[11px] text-on-surface">
-            Pay Now: <strong className="text-primary font-bold">₹{payNowAmount.toLocaleString('en-IN')}</strong>
+            Pay Now: <strong className="text-primary font-bold">₹{onlineCalc.payNowAmount.toLocaleString('en-IN')}</strong>
           </div>
         </div>
       </label>
@@ -122,8 +135,8 @@ export default function PaymentSelector({
           </div>
 
           <div className="text-right shrink-0">
-            <div className="font-headline-md text-lg text-on-surface">
-              ₹{subtotal.toLocaleString('en-IN')}
+            <div className="font-headline-md text-lg text-on-surface font-bold">
+              ₹{hybridCalc.total.toLocaleString('en-IN')}
             </div>
             <span className="font-label-sm text-[11px] text-on-surface-muted block">
               Total Order
@@ -131,16 +144,18 @@ export default function PaymentSelector({
           </div>
         </div>
 
-        {/* Breakdown preview pill */}
+        {/* Breakdown preview pill (Independent Hybrid Calculation) */}
         <div className="mt-sm pt-sm border-t border-border/50 flex flex-wrap items-center justify-between text-xs text-on-surface-muted gap-2 font-body-md">
-          <div className="flex items-center gap-xs">
-            <span className="material-symbols-outlined text-[16px]">
+          <div className="flex items-center gap-xs text-on-surface">
+            <span className="material-symbols-outlined text-[16px] text-primary">
               local_shipping
             </span>
-            <span>Due on delivery: <strong className="text-on-surface font-semibold">₹{codAmount.toLocaleString('en-IN')}</strong></span>
+            <span>
+              Due on delivery: <strong className="text-on-surface font-semibold">₹{hybridCalc.dueOnDelivery.toLocaleString('en-IN')}</strong>
+            </span>
           </div>
           <div className="font-label-sm uppercase tracking-wider text-[11px] text-on-surface">
-            Pay Now: <strong className="text-primary font-bold">₹{payNowAmount.toLocaleString('en-IN')}</strong>
+            Pay Now: <strong className="text-primary font-bold">₹{hybridCalc.payNowAmount.toLocaleString('en-IN')}</strong>
           </div>
         </div>
       </label>
@@ -150,7 +165,7 @@ export default function PaymentSelector({
         <span className="material-symbols-outlined text-[14px]">
           verified_user
         </span>
-        <span>All transactions are encrypted with 256-bit security. (Demonstration preview).</span>
+        <span>All transactions are encrypted with 256-bit security.</span>
       </div>
     </div>
   );

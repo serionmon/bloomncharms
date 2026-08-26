@@ -1,5 +1,52 @@
 # Bloomncharms — Changelog
 
+## [0.11.0] — 2026-08-26 — Shipping Infrastructure with Shiprocket (Milestone 11)
+
+### Added
+
+#### Backend Shipping Service & Shiprocket Integration
+- `ShiprocketClient` (`backend/src/shipping/shiprocket.ts`):
+  - Official REST API operations with automatic token authentication, 9-day memory caching, and graceful offline simulation mode when credentials are not configured.
+  - `createOrder()`: Creates adhoc courier orders mapping product dimensions, pickup locations, customer destinations, and payment modes (`Prepaid` vs `COD`).
+  - `assignAwb()`: Automatic AWB generation and courier partner assignment (`Blue Dart`, `Delhivery`, etc.).
+  - `trackByAwb()`: Real-time checkpoint tracking.
+  - `cancelOrder()`: Provider shipment cancellation.
+- `ShippingService` (`backend/src/shipping/service.ts`):
+  - `createShipment()`: Server-authoritative shipment creation with duplicate shipment guards.
+  - `assignAwb()`: AWB assignment transitioning order shipping status to `in_transit`.
+  - `getShipmentTracking()`: Scoped tracking data with IDOR protection.
+  - `handleWebhook()`: Inbound webhook verification and event deduplication via `public.shipment_events`.
+- **Admin Shipping Routes** (`backend/src/admin/routes.ts`):
+  - `GET /api/admin/orders/:id/shipping`, `POST /api/admin/orders/:id/shipping/create`, `POST /api/admin/orders/:id/shipping/awb`, `POST /api/admin/orders/:id/shipping/cancel` (protected by `authenticate + requireAdmin`).
+- **Customer & Public Tracking Routes** (`backend/src/shipping/routes.ts`):
+  - `GET /api/shipping/track/:orderIdentifier`
+  - `POST /api/shipping/webhook`
+- **Frontend Live Tracking** (`frontend/app/track-order/page.tsx` & `frontend/lib/api.ts`):
+  - Seamlessly queries `/api/shipping/track/:orderIdentifier` and renders live courier partner, AWB code, and courier tracking links without changing the editorial page design.
+- **Database Schema**:
+  - `supabase/migrations/20260826000006_shipping_infrastructure.sql`: Adds shipping columns to `public.orders` and creates `public.shipment_events` table with RLS policies.
+
+---
+
+## [0.10.0] — 2026-08-26 — Email Notifications with Resend (Milestone 10)
+
+### Added
+
+#### Backend Resend Email Integration & Templates
+- `EmailService` (`backend/src/email/service.ts`):
+  - `sendOrderEmails()`: Asynchronous dispatch of customer order confirmation and store admin notification after order commitment.
+  - `sendCustomerConfirmation()`: Formatted customer email detailing line items, discounts, shipping destination, and exact payment split.
+  - `sendAdminNewOrderAlert()`: Studio operational order notification with customer contact info, totals, and delivery destination.
+  - **Idempotency Tracking**: Keyed per `${orderNumber}:${emailType}` using memory and database table `email_notifications`.
+  - **Graceful Dev Fallback**: No-op simulation when `RESEND_API_KEY` is not present, ensuring development and unit testing never crash.
+- **Templates**:
+  - `renderOrderConfirmationHtml` / `renderOrderConfirmationPlainText` (`backend/src/email/templates/order-confirmation.ts`): Italian editorial visual design in HTML and plain text.
+  - `renderAdminNewOrderHtml` / `renderAdminNewOrderPlainText` (`backend/src/email/templates/new-order-admin.ts`): Clear structured admin notification layout in HTML and plain text.
+- **Database Schema**:
+  - `supabase/migrations/20260826000005_email_notifications.sql`: Adds `public.email_notifications` with unique composite index on `(order_number, email_type)` and RLS policies.
+
+---
+
 ## [0.9.1] — 2026-08-26 — Admin Products Management UI
 
 ### Added

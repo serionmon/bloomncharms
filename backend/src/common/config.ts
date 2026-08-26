@@ -14,6 +14,14 @@ const configSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().default('Bloomncharms <orders@bloomncharms.com>'),
+  STORE_ADMIN_EMAIL: z.string().default('admin@bloomncharms.com'),
+  SHIPROCKET_EMAIL: z.string().optional(),
+  SHIPROCKET_PASSWORD: z.string().optional(),
+  SHIPROCKET_API_TOKEN: z.string().optional(),
+  SHIPROCKET_WEBHOOK_SECRET: z.string().optional(),
+  SHIPROCKET_PICKUP_LOCATION: z.string().default('Primary Atelier'),
 });
 
 export type Config = z.infer<typeof configSchema>;

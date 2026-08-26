@@ -4,6 +4,7 @@ import { StorageService } from '../storage/service.js';
 import { AdminProductService } from './service.js';
 import { InventoryService } from '../inventory/service.js';
 import { DiscountService } from '../discounts/service.js';
+import { ShippingService } from '../shipping/service.js';
 import {
   productIdParamSchema,
   productImageParamsSchema,
@@ -633,14 +634,72 @@ export const adminRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
   });
 
   // =========================================================================
-  // Stubs for future milestones (Milestone 8+)
+  // Admin Shipping Management (Milestone 11)
+  // Protected by authenticate + requireAdmin
   // =========================================================================
 
-  fastify.get('/orders', async (_request, reply) => {
+  fastify.get('/orders/:id/shipping', { preHandler: requireAdmin }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const tracking = await ShippingService.getShipmentTracking(id, undefined, true);
+      return reply.send(tracking);
+    } catch (err: any) {
+      return reply.status(err.statusCode || 500).send({
+        statusCode: err.statusCode || 500,
+        error: err.name || 'Internal Server Error',
+        message: err.message || 'Failed to fetch shipping details.',
+      });
+    }
+  });
+
+  fastify.post('/orders/:id/shipping/create', { preHandler: requireAdmin }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const shipment = await ShippingService.createShipment(id, request.body as any);
+      return reply.status(201).send(shipment);
+    } catch (err: any) {
+      return reply.status(err.statusCode || 400).send({
+        statusCode: err.statusCode || 400,
+        error: err.statusCode === 404 ? 'Not Found' : 'Bad Request',
+        message: err.message || 'Failed to create shipment.',
+      });
+    }
+  });
+
+  fastify.post('/orders/:id/shipping/awb', { preHandler: requireAdmin }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body || {}) as { courierId?: number };
+    try {
+      const res = await ShippingService.assignAwb(id, body.courierId);
+      return reply.send(res);
+    } catch (err: any) {
+      return reply.status(err.statusCode || 400).send({
+        statusCode: err.statusCode || 400,
+        error: err.statusCode === 404 ? 'Not Found' : 'Bad Request',
+        message: err.message || 'Failed to assign AWB.',
+      });
+    }
+  });
+
+  fastify.post('/orders/:id/shipping/cancel', { preHandler: requireAdmin }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const res = await ShippingService.cancelShipment(id);
+      return reply.send(res);
+    } catch (err: any) {
+      return reply.status(err.statusCode || 400).send({
+        statusCode: err.statusCode || 400,
+        error: err.statusCode === 404 ? 'Not Found' : 'Bad Request',
+        message: err.message || 'Failed to cancel shipment.',
+      });
+    }
+  });
+
+  fastify.get('/orders', { preHandler: requireAdmin }, async (_request, reply) => {
     return reply.status(501).send({ message: 'Admin orders list foundation prepared.' });
   });
 
-  fastify.put('/orders/:id/status', async (_request, reply) => {
+  fastify.put('/orders/:id/status', { preHandler: requireAdmin }, async (_request, reply) => {
     return reply.status(501).send({ message: 'Admin order status update foundation prepared.' });
   });
 };

@@ -7,7 +7,7 @@
 
 ## CURRENT MILESTONE
 
-**Milestone 10 — Email (Resend)**  
+**Milestone 12 — Reverse Proxy (Caddy)**  
 Status: ⬜ Not started
 
 ---
@@ -24,11 +24,55 @@ Status: ⬜ Not started
 | 6 | Inventory + Discounts | ✅ Complete |
 | 7 | Customer Accounts | ✅ Complete |
 | 8 | Orders | ✅ Complete |
-| 9 | Payments (Razorpay) | ✅ Complete (Live test credentials pending setup) |
-| 10 | Email (Resend) | ⬜ Not started |
-| 11 | Shipping (Shiprocket) | ⬜ Not started |
+| 9 | Payments (Razorpay) | ✅ Complete (Implemented — live/test credential verification pending) |
+| 10 | Email (Resend) | ✅ Complete (Implemented — live delivery verification pending) |
+| 11 | Shipping (Shiprocket) | ✅ Complete (Implemented — live courier verification pending) |
 | 12 | Reverse Proxy (Caddy) | ⬜ Not started |
 | 13 | Production Hardening | ⬜ Not started |
+
+---
+
+## MILESTONE 11 — COMPLETE: Shipping Infrastructure (Shiprocket)
+
+### Shipping Architecture & Security
+- `ShiprocketClient` (`backend/src/shipping/shiprocket.ts`):
+  - REST client with automatic token generation, memory caching (9 days), and offline simulation mode when credentials are not configured.
+  - `createOrder()`: Creates adhoc courier order with dimensions, pickup location, address, items, and authoritative payment method (`Prepaid` for `full_online`/`paid`, `COD` with balance for `hybrid`/`cod`).
+  - `assignAwb()`: Assigns courier and generates AWB tracking code and tracking URL.
+  - `trackByAwb()`: Real-time checkpoint tracking lookup.
+  - `cancelOrder()`: Provider shipment cancellation.
+- `ShippingService` (`backend/src/shipping/service.ts`):
+  - `createShipment(orderId, input)`: Validates order, duplicate shipment protection, maps payload, calls Shiprocket, persists provider IDs and timestamps.
+  - `assignAwb(orderId, courierId)`: Assigns AWB and transitions shipping status to `in_transit`.
+  - `getShipmentTracking(orderIdentifier, userId, isAdmin)`: Scoped customer tracking with IDOR protection and checkpoint timeline.
+  - `cancelShipment(orderId)`: Cancels active shipments with provider and updates order status.
+  - `handleWebhook(payload, signature)`: Token/HMAC signature verification and event deduplication via `public.shipment_events`.
+- **Endpoints**:
+  - Admin: `GET /api/admin/orders/:id/shipping`, `POST /api/admin/orders/:id/shipping/create`, `POST /api/admin/orders/:id/shipping/awb`, `POST /api/admin/orders/:id/shipping/cancel` (protected by `authenticate + requireAdmin`).
+  - Public / Customer Tracking: `GET /api/shipping/track/:orderIdentifier`
+  - Webhook: `POST /api/shipping/webhook`
+- **Frontend Tracking** (`frontend/app/track-order/page.tsx` & `frontend/lib/api.ts`):
+  - Integrated `fetchShipmentTracking()` to display live courier partner, AWB tracking number, and tracking URL link seamlessly inside the existing editorial tracking UI.
+- **Database Schema** (`supabase/migrations/20260826000006_shipping_infrastructure.sql`):
+  - `public.orders`: Added `shipping_provider`, `shipment_id`, `shiprocket_order_id`, `awb_code`, `courier_name`, `shipping_status`, `tracking_url`, `shipped_at`, `delivered_at`.
+  - `public.shipment_events`: Table for webhook idempotency and customer-visible tracking event history with RLS policies.
+
+---
+
+## MILESTONE 10 — COMPLETE: Email Notifications (Resend)
+
+### Email Architecture & Security
+- `EmailService` (`backend/src/email/service.ts`):
+  - `sendOrderEmails(data, orderId)`: Dispatches customer order confirmation and store admin notification asynchronously after order commitment. Never throws and never rolls back created orders upon delivery failure.
+  - `sendCustomerConfirmation(data, orderId)`: Customer confirmation email with full financial itemization, discount details, and exact payment split breakdown (paid advance vs due on doorstep delivery).
+  - `sendAdminNewOrderAlert(data, orderId)`: Store admin notification with customer contact information, order details, line items, and fulfillment destinations.
+  - **Idempotency**: Keyed by `${orderNumber}:${emailType}` to ensure retry requests or network repetitions never produce duplicate emails.
+  - **Safe Fallback**: Operates in non-crashing no-op mode in development if `RESEND_API_KEY` is not present, logging delivery skipping clearly.
+- **Email Templates**:
+  - `renderOrderConfirmationHtml` & `renderOrderConfirmationPlainText` (`backend/src/email/templates/order-confirmation.ts`): Editorial serif styling, porcelain background (`#FAFAF8`), charcoal text (`#1C1B1F`), burgundy accents (`#800020`), and responsive tables.
+  - `renderAdminNewOrderHtml` & `renderAdminNewOrderPlainText` (`backend/src/email/templates/new-order-admin.ts`): High-clarity operational alert layout for studio administrators.
+- **Database Schema** (`supabase/migrations/20260826000005_email_notifications.sql`):
+  - `public.email_notifications` with unique index `(order_number, email_type)` for persistence, audit tracking, and idempotency.
 
 ---
 

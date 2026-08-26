@@ -555,6 +555,22 @@ export interface OrderPreviewResult {
   codAmount: number;
 }
 
+function parseResponseError(status: number, data: any, defaultMsg: string): string {
+  if (status === 401) return 'Your session has expired. Please sign in again.';
+  if (status === 403) return 'You do not have permission to perform this action.';
+  if (status === 404) return 'The requested resource or product was not found.';
+  if (status >= 500) return 'Checkout service is temporarily unavailable. Please try again.';
+  if (data && typeof data.message === 'string' && data.message.trim().length > 0) {
+    return data.message;
+  }
+  return defaultMsg;
+}
+
+function parseNetworkError(error: any): string {
+  console.warn('[API Client Network Exception]:', error);
+  return 'Unable to reach the checkout service. Please check your connection or try again.';
+}
+
 /**
  * Fetch authoritative order calculation and inventory availability from backend.
  */
@@ -579,14 +595,22 @@ export async function fetchOrderPreview(
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json();
+    let data: any = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+
     if (res.ok && data.preview) {
       return { success: true, preview: data.preview };
     }
-    return { success: false, error: data.message || 'Failed to calculate order preview.' };
+    return {
+      success: false,
+      error: parseResponseError(res.status, data, 'Failed to calculate order preview.'),
+    };
   } catch (error: any) {
-    console.warn('[API Client] fetchOrderPreview failed:', error);
-    return { success: false, error: error.message || 'Network error occurred.' };
+    return { success: false, error: parseNetworkError(error) };
   }
 }
 
@@ -637,14 +661,22 @@ export async function createOrder(
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json();
+    let data: any = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+
     if (res.ok && data.order) {
       return { success: true, order: data.order };
     }
-    return { success: false, error: data.message || 'Failed to create order.' };
+    return {
+      success: false,
+      error: parseResponseError(res.status, data, 'Failed to create order.'),
+    };
   } catch (error: any) {
-    console.warn('[API Client] createOrder failed:', error);
-    return { success: false, error: error.message || 'Network error occurred.' };
+    return { success: false, error: parseNetworkError(error) };
   }
 }
 
@@ -707,14 +739,22 @@ export async function createRazorpayOrder(
       body: JSON.stringify({ orderNumber }),
     });
 
-    const data = await res.json();
+    let data: any = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+
     if (res.ok && data.razorpayOrder) {
       return { success: true, razorpayOrder: data.razorpayOrder };
     }
-    return { success: false, error: data.message || 'Failed to initiate Razorpay payment.' };
+    return {
+      success: false,
+      error: parseResponseError(res.status, data, 'Failed to initiate secure payment.'),
+    };
   } catch (error: any) {
-    console.warn('[API Client] createRazorpayOrder failed:', error);
-    return { success: false, error: error.message || 'Network error occurred.' };
+    return { success: false, error: parseNetworkError(error) };
   }
 }
 
@@ -747,14 +787,22 @@ export async function verifyRazorpayPayment(
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json();
+    let data: any = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = {};
+    }
+
     if (res.ok && data.result) {
       return { success: true, result: data.result };
     }
-    return { success: false, error: data.message || 'Payment signature verification failed.' };
+    return {
+      success: false,
+      error: parseResponseError(res.status, data, 'Payment signature verification failed.'),
+    };
   } catch (error: any) {
-    console.warn('[API Client] verifyRazorpayPayment failed:', error);
-    return { success: false, error: error.message || 'Network error occurred.' };
+    return { success: false, error: parseNetworkError(error) };
   }
 }
 
@@ -1077,4 +1125,42 @@ export async function deleteAdminProductImage(
     console.warn('[API Client] deleteAdminProductImage failed:', error);
     return { success: false, error: error.message || 'Network error.' };
   }
+}
+
+/**
+ * Fetch shipment tracking details for an order.
+ */
+export async function fetchShipmentTracking(
+  orderIdentifier: string,
+  token?: string
+): Promise<{
+  orderNumber: string;
+  shippingStatus: string;
+  courierName?: string;
+  awbCode?: string;
+  trackingUrl?: string;
+  shippedAt?: string;
+  deliveredAt?: string;
+  destinationCity?: string;
+  destinationState?: string;
+  checkpoints: Array<{
+    timestamp: string;
+    location: string;
+    status: string;
+    activity: string;
+  }>;
+} | null> {
+  const url = `${API_BASE_URL}/api/shipping/track/${encodeURIComponent(orderIdentifier)}`;
+  try {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, { method: 'GET', headers });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (error) {
+    console.warn('[API Client] fetchShipmentTracking failed:', error);
+  }
+  return null;
 }

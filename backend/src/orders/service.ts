@@ -1,6 +1,8 @@
 import { getAdminSupabaseClient } from '../common/supabase.js';
 import { config } from '../common/config.js';
 import { DiscountService } from '../discounts/service.js';
+import { EmailService } from '../email/service.js';
+import { type OrderConfirmationEmailData } from '../email/templates/order-confirmation.js';
 import {
   type OrderPreviewInput,
   type CreateOrderInput,
@@ -17,6 +19,21 @@ export interface ValidatedLineItem {
   lineTotal: number;
   customization?: Record<string, any>;
   image?: string;
+}
+
+export interface OrderCalculationResult {
+  validatedItems: ValidatedLineItem[];
+  subtotal: number;
+  couponDiscount: number;
+  appliedCouponCode?: string;
+  discountId?: string;
+  paymentMethodDiscount: number;
+  totalDiscount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  payNowAmount: number;
+  codAmount: number;
 }
 
 export interface OrderPreviewDTO {
@@ -369,6 +386,10 @@ export class OrderService {
       if (input.idempotencyKey) {
         idempotencyStore.set(input.idempotencyKey, { order: offlineOrder, timestamp: Date.now() });
       }
+
+      // Milestone 10: Dispatch asynchronous email notifications
+      this.dispatchOrderEmails(offlineOrder, calc);
+
       return offlineOrder;
     }
 
@@ -444,6 +465,9 @@ export class OrderService {
         if (input.idempotencyKey) {
           idempotencyStore.set(input.idempotencyKey, { order: finalOrder, timestamp: Date.now() });
         }
+
+        // Milestone 10: Dispatch asynchronous email notifications
+        this.dispatchOrderEmails(finalOrder, calc);
 
         return finalOrder;
       }
@@ -594,6 +618,9 @@ export class OrderService {
         idempotencyStore.set(input.idempotencyKey, { order: finalOrder, timestamp: Date.now() });
       }
 
+      // Milestone 10: Dispatch asynchronous email notifications
+      this.dispatchOrderEmails(finalOrder, calc);
+
       return finalOrder;
     } catch (err: any) {
       // Step D: Rollback compensation — revert any deducted stock and delete order record
@@ -701,5 +728,57 @@ export class OrderService {
         lineTotal: Number(item.line_total),
       })),
     };
+  }
+
+  /**
+   * Safe asynchronous dispatcher for order confirmation & admin alert emails.
+   */
+  private static dispatchOrderEmails(finalOrder: OrderResponseDTO, calc: OrderCalculationResult): void {
+    try {
+      const addr = (finalOrder.shippingAddress || {}) as any;
+      const emailPayload: OrderConfirmationEmailData = {
+        orderNumber: finalOrder.orderNumber,
+        orderDate: new Date(finalOrder.createdAt).toLocaleDateString('en-IN', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        customerName: finalOrder.customerName,
+        customerEmail: finalOrder.customerEmail,
+        customerPhone: finalOrder.customerPhone,
+        shippingAddress: {
+          addressLine1: addr.addressLine1 || addr.address || '',
+          addressLine2: addr.addressLine2 || addr.apartment || undefined,
+          city: addr.city || '',
+          state: addr.state || '',
+          postalCode: addr.postalCode || addr.pinCode || '',
+          country: addr.country || 'IN',
+        },
+        items: finalOrder.items.map((i) => ({
+          name: i.productName,
+          sku: i.productSku,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          lineTotal: i.lineTotal,
+          customization: i.customization,
+        })),
+        subtotal: finalOrder.subtotal,
+        couponCode: calc.appliedCouponCode,
+        couponDiscount: calc.couponDiscount,
+        paymentMethodDiscount: calc.paymentMethodDiscount,
+        totalDiscount: finalOrder.discountAmount,
+        shippingFee: finalOrder.shippingFee,
+        totalAmount: finalOrder.totalAmount,
+        paymentMethod: finalOrder.paymentMethod,
+        paymentStatus: finalOrder.paymentStatus,
+        amountPaid: finalOrder.payNowAmount,
+        amountDue: finalOrder.codAmount,
+      };
+
+      // Non-blocking fire-and-forget dispatch
+      void EmailService.sendOrderEmails(emailPayload, finalOrder.id);
+    } catch (err: any) {
+      console.warn('[OrderService] Email notification dispatch failed silently:', err?.message || err);
+    }
   }
 }

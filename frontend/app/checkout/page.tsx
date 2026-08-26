@@ -7,6 +7,7 @@ import { useCart } from '@/components/commerce/CartProvider';
 import { useAuth } from '@/components/auth/AuthProvider';
 import OrderSuccessModal from '@/components/commerce/OrderSuccessModal';
 import PaymentSelector, { PaymentMethodType } from '@/components/commerce/PaymentSelector';
+import { calculatePaymentOption } from '@/lib/payment-calc';
 import { validateDiscount, fetchOrderPreview, createOrder, createRazorpayOrder, verifyRazorpayPayment, type OrderPreviewResult } from '@/lib/api';
 import { loadRazorpayScript } from '@/lib/razorpay';
 
@@ -69,14 +70,35 @@ export default function CheckoutPage() {
   const [generatedOrderNumber, setGeneratedOrderNumber] = useState('');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
-  // Financial calculations (authoritative from server when available, otherwise local derivation)
+  // Financial calculations
   const subtotal = serverPreview?.subtotal ?? getSubtotal();
-  const couponDiscount = serverPreview ? serverPreview.couponDiscount : (appliedCoupon ? appliedCoupon.discountAmount : 0);
-  const subtotalAfterCoupon = Math.max(0, subtotal - couponDiscount);
-  const onlineDiscount = serverPreview ? serverPreview.paymentMethodDiscount : (paymentMethod === 'full_online' ? Math.round(subtotalAfterCoupon * 0.1) : 0);
-  const total = serverPreview ? serverPreview.totalAmount : (subtotalAfterCoupon - onlineDiscount);
-  const payNowAmount = serverPreview ? serverPreview.payNowAmount : (paymentMethod === 'full_online' ? total : Math.round(total * 0.5));
-  const codAmount = serverPreview ? serverPreview.codAmount : (paymentMethod === 'hybrid' ? total - payNowAmount : 0);
+  const couponDiscount = serverPreview
+    ? serverPreview.couponDiscount
+    : (appliedCoupon ? appliedCoupon.discountAmount : 0);
+
+  // Independent calculations for each payment option
+  const onlineCalculation = calculatePaymentOption(subtotal, 'full_online', couponDiscount);
+  const hybridCalculation = calculatePaymentOption(subtotal, 'hybrid', couponDiscount);
+
+  // Active selected calculation for Order Summary and submission
+  const selectedCalculation =
+    paymentMethod === 'full_online' ? onlineCalculation : hybridCalculation;
+
+  const onlineDiscount = serverPreview
+    ? serverPreview.paymentMethodDiscount
+    : selectedCalculation.onlineDiscount;
+  const total = serverPreview ? serverPreview.totalAmount : selectedCalculation.total;
+  const payNowAmount = serverPreview
+    ? serverPreview.payNowAmount
+    : selectedCalculation.payNowAmount;
+  const codAmount = serverPreview
+    ? serverPreview.codAmount
+    : selectedCalculation.dueOnDelivery;
+
+  const handlePaymentMethodChange = (newMethod: PaymentMethodType) => {
+    setPaymentMethod(newMethod);
+    setServerPreview(null);
+  };
 
   const token = session?.access_token;
 
@@ -284,7 +306,10 @@ export default function CheckoutPage() {
             setIsSuccessModalOpen(true);
             clearCart();
           } else {
-            setOrderError(verifyRes.error || 'Payment verification failed. Please contact support.');
+            setOrderError(
+              verifyRes.error ||
+                'Payment verification could not be completed. Your order has not been marked as paid. Please contact support.'
+            );
           }
           setIsPlacingOrder(false);
         },
@@ -297,13 +322,18 @@ export default function CheckoutPage() {
 
       const razorpayInstance = new (window as any).Razorpay(options);
       razorpayInstance.on('payment.failed', function (resp: any) {
-        setOrderError(resp.error?.description || 'Payment was declined or failed.');
+        console.warn('[Razorpay Payment Failed]:', resp.error);
+        const reason =
+          resp.error?.description ||
+          resp.error?.reason ||
+          'Payment could not be completed. Please check your payment details or try again.';
+        setOrderError(reason);
         setIsPlacingOrder(false);
       });
       razorpayInstance.open();
     } catch (err: any) {
-      console.error('[Checkout] Razorpay error:', err);
-      setOrderError(err?.message || 'An unexpected error occurred during payment.');
+      console.error('[Checkout] Razorpay initialization error:', err);
+      setOrderError(err?.message || 'Payment initialization could not be completed. Please try again.');
       setIsPlacingOrder(false);
     }
   };
@@ -649,11 +679,11 @@ export default function CheckoutPage() {
 
                   <PaymentSelector
                     selectedMethod={paymentMethod}
-                    onChange={setPaymentMethod}
+                    onChange={handlePaymentMethodChange}
                     subtotal={subtotal}
-                    onlineDiscount={onlineDiscount}
-                    payNowAmount={payNowAmount}
-                    codAmount={codAmount}
+                    couponDiscount={couponDiscount}
+                    onlineCalculation={onlineCalculation}
+                    hybridCalculation={hybridCalculation}
                   />
 
                   {/* Step 2 Actions */}
