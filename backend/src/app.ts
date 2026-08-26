@@ -5,6 +5,7 @@ import { config } from './common/config.js';
 import { errorHandler } from './common/errors.js';
 import { authRoutes } from './auth/routes.js';
 import { productRoutes } from './products/routes.js';
+import { categoryRoutes } from './categories/routes.js';
 import { inventoryRoutes } from './inventory/routes.js';
 import { orderRoutes } from './orders/routes.js';
 import { discountRoutes } from './discounts/routes.js';
@@ -49,6 +50,7 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
   // Modular API routes
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(productRoutes, { prefix: '/api/products' });
+  await app.register(categoryRoutes, { prefix: '/api/categories' });
   await app.register(inventoryRoutes, { prefix: '/api/inventory' });
   await app.register(orderRoutes, { prefix: '/api/orders' });
   await app.register(discountRoutes, { prefix: '/api/discounts' });
