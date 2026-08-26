@@ -81,3 +81,35 @@ export async function requireAdmin(
   }
 }
 
+/**
+ * Fastify preHandler — optionally verifies JWT if present.
+ * If no Authorization header is provided, proceeds without error (guest mode).
+ */
+export async function authenticateOptional(
+  request: FastifyRequest,
+  _reply: FastifyReply
+): Promise<void> {
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return;
+  }
+
+  const token = authHeader.slice(7);
+  try {
+    const supabase = getAdminSupabaseClient();
+    const { data, error } = await supabase.auth.getUser(token);
+    if (!error && data?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single();
+
+      request.user = {
+        id: data.user.id,
+        email: data.user.email ?? '',
+        role: (profile?.role as 'customer' | 'admin') ?? 'customer',
+      };
+    }
+  } catch {}
+}

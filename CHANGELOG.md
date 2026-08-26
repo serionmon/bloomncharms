@@ -1,5 +1,51 @@
 # Bloomncharms — Changelog
 
+## [0.9.1] — 2026-08-26 — Admin Products Management UI
+
+### Added
+
+#### Frontend Atelier Products Console
+- `frontend/components/admin/AdminNav.tsx`: Added `PRODUCTS` navigation tab (`STOREFRONT | PRODUCTS | INVENTORY | DISCOUNTS`) with active route highlighting.
+- `frontend/app/admin/products/page.tsx`: Full product catalog table with search (by name, SKU, slug), filters (category, active status, stock level), summary KPI cards, and edit/deactivate actions.
+- `frontend/app/admin/products/new/page.tsx`: Product creation studio with auto-slug generation, SKU suggestion, multi-image upload dropzone, alt text inputs, and real-time live storefront card preview.
+- `frontend/app/admin/products/[id]/page.tsx`: Product editor with existing media gallery management, instant image uploads, image deletion, activate/deactivate toggles, and direct links to Atelier Inventory and Storefront.
+- `frontend/lib/api.ts`: Added `fetchAdminProducts`, `fetchAdminProductById`, `createAdminProduct`, `updateAdminProduct`, `deactivateAdminProduct`, `uploadAdminProductImage`, `updateAdminProductImage`, and `deleteAdminProductImage`.
+
+---
+
+## [0.9.0] — 2026-08-26 — Razorpay Payment Integration (Milestone 9)
+
+### Added
+
+#### Backend Razorpay Integration & Webhook Handler
+- `RazorpayService` (`backend/src/payments/service.ts`):
+  - `createPaymentOrder()`: Server-authoritative payable amount derivation (`full_online` 100% vs `hybrid` 50% split in integer Paise), ownership validation, Razorpay order creation via official SDK, and `payment_transactions` audit recording.
+  - `verifyPaymentSignature()`: Timing-safe HMAC-SHA256 signature verification comparing database-stored `razorpay_order_id` with `razorpay_payment_id` against `RAZORPAY_KEY_SECRET`. Transitions order state to `paid` or `partially_paid`.
+  - `handleWebhook()`: Raw body HMAC-SHA256 signature verification with `RAZORPAY_WEBHOOK_SECRET` and event deduplication via `payment_events`.
+- Payment Routes (`backend/src/payments/routes.ts`):
+  - `POST /api/payments/razorpay/order`: Protected order creation.
+  - `POST /api/payments/razorpay/verify`: Signature verification.
+  - `POST /api/payments/razorpay/webhook`: Webhook endpoint with raw body capture.
+- Fastify Content Parser (`backend/src/app.ts`): Added raw buffer retention on `application/json` requests.
+
+#### Frontend Checkout & Razorpay Integration
+- `frontend/app/checkout/page.tsx`:
+  - Connected online checkout submission to launch official Razorpay Standard Checkout modal (`checkout.js`).
+  - Passes brand burgundy styling (`#800020`), order ID, amount, and customer prefill.
+  - Handles client callback and sends signature to backend for verification before rendering `OrderSuccessModal`.
+- `frontend/lib/api.ts` & `frontend/lib/razorpay.ts`: Added `createRazorpayOrder`, `verifyRazorpayPayment`, and `loadRazorpayScript`.
+
+#### Database Migration
+- `supabase/migrations/20260826000004_razorpay_payments.sql`:
+  - Extended `public.orders` with `razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature`, `amount_paid`.
+  - Created `public.payment_events` (with unique `event_id`) for webhook idempotency.
+  - Created `public.payment_transactions` for complete payment attempt audit trails.
+
+#### Automated Test Suite
+- `backend/src/scripts/test-razorpay.ts`: Automated test suite covering amount derivations (Paise precision), signature verification, timing-safe checks, webhook signatures, webhook deduplication, hybrid partial payments, and frontend secrets isolation.
+
+---
+
 ## [0.8.0] — 2026-08-26 — Orders & Checkout Backend (Milestone 8)
 
 ### Added

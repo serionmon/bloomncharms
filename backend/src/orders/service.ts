@@ -67,6 +67,7 @@ export interface OrderResponseDTO {
   }>;
 }
 
+export const offlineOrders = new Map<string, any>();
 const idempotencyStore = new Map<string, { order: OrderResponseDTO; timestamp: number }>();
 
 // Clean up idempotency keys older than 10 minutes
@@ -344,6 +345,26 @@ export class OrderService {
           customization: item.customization,
         })),
       };
+
+      offlineOrders.set(orderNumber, {
+        id: offlineOrder.id,
+        order_number: offlineOrder.orderNumber,
+        user_id: offlineOrder.userId,
+        customer_name: offlineOrder.customerName,
+        customer_email: offlineOrder.customerEmail,
+        customer_phone: offlineOrder.customerPhone,
+        shipping_address: offlineOrder.shippingAddress,
+        order_status: offlineOrder.orderStatus,
+        payment_status: offlineOrder.paymentStatus,
+        payment_method: offlineOrder.paymentMethod,
+        subtotal: offlineOrder.subtotal,
+        discount_amount: offlineOrder.discountAmount,
+        shipping_fee: offlineOrder.shippingFee,
+        tax_amount: offlineOrder.taxAmount,
+        total_amount: offlineOrder.totalAmount,
+        notes: offlineOrder.notes,
+        created_at: offlineOrder.createdAt,
+      });
 
       if (input.idempotencyKey) {
         idempotencyStore.set(input.idempotencyKey, { order: offlineOrder, timestamp: Date.now() });

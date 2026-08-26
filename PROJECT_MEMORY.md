@@ -7,7 +7,7 @@
 
 ## CURRENT MILESTONE
 
-**Milestone 9 — Payments (Razorpay)**  
+**Milestone 10 — Email (Resend)**  
 Status: ⬜ Not started
 
 ---
@@ -24,7 +24,7 @@ Status: ⬜ Not started
 | 6 | Inventory + Discounts | ✅ Complete |
 | 7 | Customer Accounts | ✅ Complete |
 | 8 | Orders | ✅ Complete |
-| 9 | Payments (Razorpay) | ⬜ Not started |
+| 9 | Payments (Razorpay) | ✅ Complete (Live test credentials pending setup) |
 | 10 | Email (Resend) | ⬜ Not started |
 | 11 | Shipping (Shiprocket) | ⬜ Not started |
 | 12 | Reverse Proxy (Caddy) | ⬜ Not started |
@@ -32,7 +32,26 @@ Status: ⬜ Not started
 
 ---
 
-## MILESTONE 8 — COMPLETE: Orders + Checkout Backend
+## MILESTONE 9 — COMPLETE: Payments (Razorpay)
+
+### Payments Architecture & Security
+- `RazorpayService` (`backend/src/payments/service.ts`):
+  - `createPaymentOrder(input, userId)`: Server-authoritative order lookup, ownership validation, payable check, integer paise calculation (`full_online` 100% vs `hybrid` 50% split), Razorpay order creation, and `payment_transactions` audit recording.
+  - `verifyPaymentSignature(input, userId)`: Retrieves server-stored `razorpay_order_id` from DB, generates expected HMAC-SHA256 signature, executes `crypto.timingSafeEqual` comparison, transitions order payment state (`paid` for `full_online`, `partially_paid` for `hybrid`), and updates transaction audit logs.
+  - `handleWebhook(rawBody, signature)`: Validates raw request body against `X-Razorpay-Signature` with `RAZORPAY_WEBHOOK_SECRET`, enforces event idempotency via `public.payment_events`, and handles `payment.captured`, `order.paid`, and `payment.failed`.
+- Endpoints (`backend/src/payments/routes.ts`):
+  - `POST /api/payments/razorpay/order`
+  - `POST /api/payments/razorpay/verify`
+  - `POST /api/payments/razorpay/webhook`
+- Frontend Integration (`frontend/app/checkout/page.tsx` & `frontend/lib/razorpay.ts`):
+  - Dynamically loads official Razorpay Standard Checkout SDK (`https://checkout.razorpay.com/v1/checkout.js`).
+  - Launches Razorpay modal on user checkout submission with burgundy brand theme and customer prefill.
+  - On payment callback, transmits signature data to `/api/payments/razorpay/verify` for server confirmation.
+- Database Schema (`supabase/migrations/20260826000004_razorpay_payments.sql`):
+  - Added `razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature`, `amount_paid` to `public.orders`.
+  - Created `public.payment_events` for webhook audit and deduplication.
+  - Created `public.payment_transactions` for complete payment attempt audit trails.
+
 
 ### Orders Architecture & Authoritative Calculations
 - `OrderService` (`backend/src/orders/service.ts`):
@@ -113,9 +132,12 @@ Status: ⬜ Not started
 - Public Endpoint:
   - `POST /api/discounts/validate`
 
-### Frontend & Checkout Integration
-- `frontend/app/checkout/page.tsx`: Connected coupon input to `POST /api/discounts/validate` with loading state, applied badge, remove button, and clear validation feedback.
-- `frontend/app/admin/layout.tsx`: Admin management console header and navigation.
+### Frontend Admin Console & Product Management
+- `frontend/app/admin/layout.tsx`: Admin management console header with server-side admin role enforcement.
+- `frontend/components/admin/AdminNav.tsx`: `STOREFRONT | PRODUCTS | INVENTORY | DISCOUNTS` navigation tabs.
+- `frontend/app/admin/products/page.tsx`: Full product catalog dashboard with KPI summary cards, multi-field search (name, SKU, slug), category/status/stock level filters, status pills, and edit/deactivate actions.
+- `frontend/app/admin/products/new/page.tsx`: Two-column product creation studio with auto-slug generation, SKU suggestion, multi-image upload dropzone, alt text inputs, and real-time live storefront card preview.
+- `frontend/app/admin/products/[id]/page.tsx`: Two-column product editor with existing media gallery management, instant photo uploads, image deletion, activate/deactivate toggles, and direct links to Atelier Inventory and Storefront.
 - `frontend/app/admin/inventory/page.tsx`: Full inventory management dashboard with live stock editor, threshold controls, status badges, and search.
 - `frontend/app/admin/discounts/page.tsx`: Discount campaigns management dashboard with modal creation form and activate/deactivate toggles.
 

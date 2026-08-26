@@ -327,6 +327,10 @@ export interface Database {
           tax_amount: number;
           total_amount: number;
           notes: string | null;
+          razorpay_order_id: string | null;
+          razorpay_payment_id: string | null;
+          razorpay_signature: string | null;
+          amount_paid: number;
           created_at: string;
           updated_at: string;
         };
@@ -347,6 +351,10 @@ export interface Database {
           tax_amount?: number;
           total_amount: number;
           notes?: string | null;
+          razorpay_order_id?: string | null;
+          razorpay_payment_id?: string | null;
+          razorpay_signature?: string | null;
+          amount_paid?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -367,6 +375,88 @@ export interface Database {
           tax_amount?: number;
           total_amount?: number;
           notes?: string | null;
+          razorpay_order_id?: string | null;
+          razorpay_payment_id?: string | null;
+          razorpay_signature?: string | null;
+          amount_paid?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      payment_events: {
+        Row: {
+          id: string;
+          event_id: string;
+          event_type: string;
+          order_id: string | null;
+          razorpay_order_id: string | null;
+          razorpay_payment_id: string | null;
+          payload: Json;
+          processed_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          event_type: string;
+          order_id?: string | null;
+          razorpay_order_id?: string | null;
+          razorpay_payment_id?: string | null;
+          payload: Json;
+          processed_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_id?: string;
+          event_type?: string;
+          order_id?: string | null;
+          razorpay_order_id?: string | null;
+          razorpay_payment_id?: string | null;
+          payload?: Json;
+          processed_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      payment_transactions: {
+        Row: {
+          id: string;
+          order_id: string;
+          razorpay_order_id: string;
+          razorpay_payment_id: string | null;
+          amount: number;
+          currency: string;
+          status: PaymentStatus;
+          error_code: string | null;
+          error_description: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          order_id: string;
+          razorpay_order_id: string;
+          razorpay_payment_id?: string | null;
+          amount: number;
+          currency?: string;
+          status?: PaymentStatus;
+          error_code?: string | null;
+          error_description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          order_id?: string;
+          razorpay_order_id?: string;
+          razorpay_payment_id?: string | null;
+          amount?: number;
+          currency?: string;
+          status?: PaymentStatus;
+          error_code?: string | null;
+          error_description?: string | null;
           created_at?: string;
           updated_at?: string;
         };

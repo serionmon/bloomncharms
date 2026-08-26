@@ -670,3 +670,411 @@ export async function trackOrder(orderNumber: string): Promise<any | null> {
 
   return null;
 }
+
+export interface RazorpayOrderInfo {
+  razorpayOrderId: string;
+  keyId: string;
+  amount: number;
+  currency: string;
+  localOrderNumber: string;
+  payableAmountInr: number;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+}
+
+/**
+ * Initiates Razorpay payment order on the backend.
+ */
+export async function createRazorpayOrder(
+  orderNumber: string,
+  token?: string
+): Promise<{ success: boolean; razorpayOrder?: RazorpayOrderInfo; error?: string }> {
+  const url = `${API_BASE_URL}/api/payments/razorpay/order`;
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ orderNumber }),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.razorpayOrder) {
+      return { success: true, razorpayOrder: data.razorpayOrder };
+    }
+    return { success: false, error: data.message || 'Failed to initiate Razorpay payment.' };
+  } catch (error: any) {
+    console.warn('[API Client] createRazorpayOrder failed:', error);
+    return { success: false, error: error.message || 'Network error occurred.' };
+  }
+}
+
+/**
+ * Verifies Razorpay payment signature with backend.
+ */
+export async function verifyRazorpayPayment(
+  payload: {
+    orderNumber: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  },
+  token?: string
+): Promise<{ success: boolean; result?: any; error?: string }> {
+  const url = `${API_BASE_URL}/api/payments/razorpay/verify`;
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.result) {
+      return { success: true, result: data.result };
+    }
+    return { success: false, error: data.message || 'Payment signature verification failed.' };
+  } catch (error: any) {
+    console.warn('[API Client] verifyRazorpayPayment failed:', error);
+    return { success: false, error: error.message || 'Network error occurred.' };
+  }
+}
+
+// =========================================================================
+// Category & Admin Product Management API Helpers
+// =========================================================================
+
+export interface AdminProductImage {
+  id: string;
+  storagePath: string;
+  publicUrl: string;
+  altText: string;
+  sortOrder: number;
+}
+
+export interface AdminProductItem {
+  id: string;
+  sku?: string;
+  slug: string;
+  name: string;
+  subtitle?: string;
+  description: string;
+  price: number;
+  currency: string;
+  imageUrl?: string;
+  altText: string;
+  badge?: string;
+  tag?: string;
+  isCustomizable: boolean;
+  isFeatured: boolean;
+  isBestseller: boolean;
+  isActive: boolean;
+  processingDays?: number;
+  createdAt: string;
+  updatedAt: string;
+  category?: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  inventory?: {
+    stockQuantity: number;
+    lowStockThreshold: number;
+  };
+  images?: AdminProductImage[];
+}
+
+export interface CreateProductPayload {
+  name: string;
+  slug?: string;
+  sku?: string;
+  categoryId?: string | null;
+  subtitle?: string;
+  description?: string;
+  price: number;
+  currency?: string;
+  imageUrl?: string | null;
+  altText?: string;
+  badge?: string | null;
+  tag?: string | null;
+  isCustomizable?: boolean;
+  isFeatured?: boolean;
+  isBestseller?: boolean;
+  isActive?: boolean;
+  processingDays?: number | null;
+  stockQuantity?: number;
+  lowStockThreshold?: number;
+}
+
+export interface UpdateProductPayload {
+  name?: string;
+  slug?: string;
+  sku?: string | null;
+  categoryId?: string | null;
+  subtitle?: string | null;
+  description?: string;
+  price?: number;
+  currency?: string;
+  imageUrl?: string | null;
+  altText?: string;
+  badge?: string | null;
+  tag?: string | null;
+  isCustomizable?: boolean;
+  isFeatured?: boolean;
+  isBestseller?: boolean;
+  isActive?: boolean;
+  processingDays?: number | null;
+  stockQuantity?: number;
+  lowStockThreshold?: number;
+}
+
+/**
+ * Fetch list of all products for admin console.
+ */
+export async function fetchAdminProducts(
+  token?: string
+): Promise<{ success: boolean; products: AdminProductItem[]; error?: string }> {
+  const url = `${API_BASE_URL}/api/admin/products`;
+  try {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
+    const data = await res.json();
+    if (res.ok && Array.isArray(data.products)) {
+      return { success: true, products: data.products };
+    }
+    return { success: false, products: [], error: data.message || 'Failed to list admin products.' };
+  } catch (error: any) {
+    console.warn('[API Client] fetchAdminProducts failed:', error);
+    return { success: false, products: [], error: error.message || 'Network error.' };
+  }
+}
+
+/**
+ * Fetch single product details by ID for admin console.
+ */
+export async function fetchAdminProductById(
+  id: string,
+  token?: string
+): Promise<{ success: boolean; product?: AdminProductItem; error?: string }> {
+  const url = `${API_BASE_URL}/api/admin/products/${encodeURIComponent(id)}`;
+  try {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
+    const data = await res.json();
+    if (res.ok && data.product) {
+      return { success: true, product: data.product };
+    }
+    return { success: false, error: data.message || 'Product not found.' };
+  } catch (error: any) {
+    console.warn('[API Client] fetchAdminProductById failed:', error);
+    return { success: false, error: error.message || 'Network error.' };
+  }
+}
+
+/**
+ * Create a new product.
+ */
+export async function createAdminProduct(
+  payload: CreateProductPayload,
+  token?: string
+): Promise<{ success: boolean; product?: AdminProductItem; error?: string }> {
+  const url = `${API_BASE_URL}/api/admin/products`;
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data.product) {
+      return { success: true, product: data.product };
+    }
+    return { success: false, error: data.message || 'Failed to create product.' };
+  } catch (error: any) {
+    console.warn('[API Client] createAdminProduct failed:', error);
+    return { success: false, error: error.message || 'Network error.' };
+  }
+}
+
+/**
+ * Update an existing product.
+ */
+export async function updateAdminProduct(
+  id: string,
+  payload: UpdateProductPayload,
+  token?: string
+): Promise<{ success: boolean; product?: AdminProductItem; error?: string }> {
+  const url = `${API_BASE_URL}/api/admin/products/${encodeURIComponent(id)}`;
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data.product) {
+      return { success: true, product: data.product };
+    }
+    return { success: false, error: data.message || 'Failed to update product.' };
+  } catch (error: any) {
+    console.warn('[API Client] updateAdminProduct failed:', error);
+    return { success: false, error: error.message || 'Network error.' };
+  }
+}
+
+/**
+ * Deactivate a product (soft delete).
+ */
+export async function deactivateAdminProduct(
+  id: string,
+  token?: string
+): Promise<{ success: boolean; product?: AdminProductItem; error?: string }> {
+  const url = `${API_BASE_URL}/api/admin/products/${encodeURIComponent(id)}/deactivate`;
+  try {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers,
+    });
+    const data = await res.json();
+    if (res.ok && data.product) {
+      return { success: true, product: data.product };
+    }
+    return { success: false, error: data.message || 'Failed to deactivate product.' };
+  } catch (error: any) {
+    console.warn('[API Client] deactivateAdminProduct failed:', error);
+    return { success: false, error: error.message || 'Network error.' };
+  }
+}
+
+/**
+ * Upload an image for a product.
+ */
+export async function uploadAdminProductImage(
+  productId: string,
+  file: File,
+  metadata: { altText?: string; sortOrder?: number } = {},
+  token?: string
+): Promise<{ success: boolean; image?: AdminProductImage; error?: string }> {
+  const url = `${API_BASE_URL}/api/admin/products/${encodeURIComponent(productId)}/images`;
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (metadata.altText) formData.append('altText', metadata.altText);
+    if (metadata.sortOrder !== undefined) formData.append('sortOrder', String(metadata.sortOrder));
+
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    const data = await res.json();
+    if (res.ok && data.image) {
+      return { success: true, image: data.image };
+    }
+    return { success: false, error: data.message || 'Failed to upload image.' };
+  } catch (error: any) {
+    console.warn('[API Client] uploadAdminProductImage failed:', error);
+    return { success: false, error: error.message || 'Network error.' };
+  }
+}
+
+/**
+ * Update metadata (altText, sortOrder) of an existing product image.
+ */
+export async function updateAdminProductImage(
+  productId: string,
+  imageId: string,
+  metadata: { altText?: string; sortOrder?: number },
+  token?: string
+): Promise<{ success: boolean; image?: AdminProductImage; error?: string }> {
+  const url = `${API_BASE_URL}/api/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`;
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(metadata),
+    });
+    const data = await res.json();
+    if (res.ok && data.image) {
+      return { success: true, image: data.image };
+    }
+    return { success: false, error: data.message || 'Failed to update image metadata.' };
+  } catch (error: any) {
+    console.warn('[API Client] updateAdminProductImage failed:', error);
+    return { success: false, error: error.message || 'Network error.' };
+  }
+}
+
+/**
+ * Delete a product image.
+ */
+export async function deleteAdminProductImage(
+  productId: string,
+  imageId: string,
+  token?: string
+): Promise<{ success: boolean; error?: string }> {
+  const url = `${API_BASE_URL}/api/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`;
+  try {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers,
+    });
+    const data = await res.json();
+    if (res.ok) {
+      return { success: true };
+    }
+    return { success: false, error: data.message || 'Failed to delete image.' };
+  } catch (error: any) {
+    console.warn('[API Client] deleteAdminProductImage failed:', error);
+    return { success: false, error: error.message || 'Network error.' };
+  }
+}

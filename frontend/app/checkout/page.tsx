@@ -7,7 +7,8 @@ import { useCart } from '@/components/commerce/CartProvider';
 import { useAuth } from '@/components/auth/AuthProvider';
 import OrderSuccessModal from '@/components/commerce/OrderSuccessModal';
 import PaymentSelector, { PaymentMethodType } from '@/components/commerce/PaymentSelector';
-import { validateDiscount, fetchOrderPreview, createOrder, type OrderPreviewResult } from '@/lib/api';
+import { validateDiscount, fetchOrderPreview, createOrder, createRazorpayOrder, verifyRazorpayPayment, type OrderPreviewResult } from '@/lib/api';
+import { loadRazorpayScript } from '@/lib/razorpay';
 
 interface FormData {
   firstName: string;
@@ -203,6 +204,7 @@ export default function CheckoutPage() {
 
     const normalizedPhone = formData.phone.replace(/[\s\-().+]/g, '').replace(/^(91|0)/, '');
 
+    // Step 1: Create Authoritative Bloomncharms Order
     const res = await createOrder(
       {
         items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
@@ -225,13 +227,83 @@ export default function CheckoutPage() {
       token
     );
 
-    if (res.success && res.order) {
-      setGeneratedOrderNumber(res.order.orderNumber);
-      setIsSuccessModalOpen(true);
-      setIsPlacingOrder(false);
-      clearCart();
-    } else {
+    if (!res.success || !res.order) {
       setOrderError(res.error || 'Failed to place order. Please check item stock or address.');
+      setIsPlacingOrder(false);
+      return;
+    }
+
+    const orderNumber = res.order.orderNumber;
+
+    // Step 2: For online payments (full_online or hybrid), initiate Razorpay
+    try {
+      const rzpRes = await createRazorpayOrder(orderNumber, token);
+      if (!rzpRes.success || !rzpRes.razorpayOrder) {
+        setOrderError(rzpRes.error || 'Failed to initialize payment gateway.');
+        setIsPlacingOrder(false);
+        return;
+      }
+
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded || !(window as any).Razorpay) {
+        setOrderError('Payment gateway could not be loaded. Please check your internet connection.');
+        setIsPlacingOrder(false);
+        return;
+      }
+
+      const rzpData = rzpRes.razorpayOrder;
+      const options = {
+        key: rzpData.keyId,
+        amount: rzpData.amount,
+        currency: rzpData.currency,
+        name: 'Bloomncharms',
+        description: `Order ${orderNumber}`,
+        order_id: rzpData.razorpayOrderId,
+        prefill: {
+          name: `${formData.firstName} ${formData.lastName}`,
+          email: formData.email,
+          contact: normalizedPhone,
+        },
+        theme: {
+          color: '#800020', // Burgundy
+        },
+        handler: async function (response: any) {
+          setIsPlacingOrder(true);
+          const verifyRes = await verifyRazorpayPayment(
+            {
+              orderNumber,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            },
+            token
+          );
+
+          if (verifyRes.success) {
+            setGeneratedOrderNumber(orderNumber);
+            setIsSuccessModalOpen(true);
+            clearCart();
+          } else {
+            setOrderError(verifyRes.error || 'Payment verification failed. Please contact support.');
+          }
+          setIsPlacingOrder(false);
+        },
+        modal: {
+          ondismiss: function () {
+            setIsPlacingOrder(false);
+          },
+        },
+      };
+
+      const razorpayInstance = new (window as any).Razorpay(options);
+      razorpayInstance.on('payment.failed', function (resp: any) {
+        setOrderError(resp.error?.description || 'Payment was declined or failed.');
+        setIsPlacingOrder(false);
+      });
+      razorpayInstance.open();
+    } catch (err: any) {
+      console.error('[Checkout] Razorpay error:', err);
+      setOrderError(err?.message || 'An unexpected error occurred during payment.');
       setIsPlacingOrder(false);
     }
   };

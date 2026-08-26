@@ -20,7 +20,7 @@ See PROJECT_MEMORY.md for current milestone status.
 
 ## Phase 3 — Commerce (🔄 In Progress)
 - Milestone 8: Orders (server-side cart validation, order creation) (✅ Complete)
-- Milestone 9: Payments (Razorpay — server-side only)
+- Milestone 9: Payments (Razorpay — server-side only) (✅ Complete)
 - Milestone 10: Email (Resend)
 - Milestone 11: Shipping (Shiprocket)
 

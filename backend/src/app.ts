@@ -26,6 +26,21 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
   // Sensible defaults and HTTP error utilities
   await app.register(sensible);
 
+  // Preserve raw body buffer for webhook signature verifications
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    (req, body, done) => {
+      (req as any).rawBody = body;
+      try {
+        const json = body.length > 0 ? JSON.parse(body.toString('utf-8')) : {};
+        done(null, json);
+      } catch (err: any) {
+        done(err, undefined);
+      }
+    }
+  );
+
   // Multipart support for file uploads (10MB limit)
   await app.register(multipart, {
     limits: {

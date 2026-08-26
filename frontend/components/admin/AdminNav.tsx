@@ -8,6 +8,7 @@ export default function AdminNav() {
   const pathname = usePathname();
 
   const navItems = [
+    { name: 'Products', href: '/admin/products', icon: 'shopping_bag' },
     { name: 'Inventory', href: '/admin/inventory', icon: 'inventory_2' },
     { name: 'Discounts', href: '/admin/discounts', icon: 'local_offer' },
   ];
