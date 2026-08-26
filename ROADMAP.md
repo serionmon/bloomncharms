@@ -10,16 +10,16 @@ See PROJECT_MEMORY.md for current milestone status.
 5. Product catalog, product detail pages
 6. All routes: /, /shop, /bouquets, /keyrings, /products/[slug], /cart, /checkout, /custom, /our-story, /track-order
 
-## Phase 2 — Backend + Data (🔄 In Progress)
+## Phase 2 — Backend + Data (✅ Complete)
 - Milestone 2: Backend Catalog API & Supabase Integration (✅ Complete)
 - Milestone 3: RLS + Auth (Supabase Auth) (✅ Complete)
 - Milestone 4: Supabase Storage (✅ Complete)
 - Milestone 5: Admin authorization + product management (✅ Complete)
 - Milestone 6: Inventory + discounts (✅ Complete)
-- Milestone 7: Customer accounts
+- Milestone 7: Customer accounts (✅ Complete)
 
-## Phase 3 — Commerce (⬜ Future)
-- Milestone 8: Orders (server-side cart validation, order creation)
+## Phase 3 — Commerce (🔄 In Progress)
+- Milestone 8: Orders (server-side cart validation, order creation) (✅ Complete)
 - Milestone 9: Payments (Razorpay — server-side only)
 - Milestone 10: Email (Resend)
 - Milestone 11: Shipping (Shiprocket)

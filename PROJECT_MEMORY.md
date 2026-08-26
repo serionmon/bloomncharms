@@ -7,7 +7,7 @@
 
 ## CURRENT MILESTONE
 
-**Milestone 7 — Customer Accounts**  
+**Milestone 9 — Payments (Razorpay)**  
 Status: ⬜ Not started
 
 ---
@@ -22,8 +22,8 @@ Status: ⬜ Not started
 | 4 | Supabase Storage | ✅ Complete |
 | 5 | Admin Authorization + Products | ✅ Complete |
 | 6 | Inventory + Discounts | ✅ Complete |
-| 7 | Customer Accounts | ⬜ Not started |
-| 8 | Orders | ⬜ Not started |
+| 7 | Customer Accounts | ✅ Complete |
+| 8 | Orders | ✅ Complete |
 | 9 | Payments (Razorpay) | ⬜ Not started |
 | 10 | Email (Resend) | ⬜ Not started |
 | 11 | Shipping (Shiprocket) | ⬜ Not started |
@@ -32,7 +32,53 @@ Status: ⬜ Not started
 
 ---
 
-## MILESTONE 6 — COMPLETE: Inventory + Discounts
+## MILESTONE 8 — COMPLETE: Orders + Checkout Backend
+
+### Orders Architecture & Authoritative Calculations
+- `OrderService` (`backend/src/orders/service.ts`):
+  - `previewOrder(input, userId)`: Server-authoritative price lookup, product active status verification, inventory availability check, coupon calculation via `DiscountService`, 10% online savings computation on `full_online`, and 50/50 payment split calculations.
+  - `createOrder(input, userId)`: Atomic order creation, snapshot line items in `public.order_items`, inventory deduction in `public.inventory`, and coupon usage recording in `public.discount_usage`.
+  - `getOrderByOrderNumber(orderNumber)`: Public order tracking lookup returning fulfillment status, items snapshot, and shipping destination.
+- Validation (`backend/src/orders/validation.ts`): Zod schemas for order previews, creation, items, and shipping addresses (enforcing 6-digit Indian PIN `/^\d{6}$/` and 10-digit mobile `/^[6-9]\d{9}$/`).
+- Order Routes (`backend/src/orders/routes.ts`):
+  - `POST /api/orders/preview`
+  - `POST /api/orders`
+  - `GET /api/orders/:orderNumber`
+  - `GET /api/orders/my-orders`
+- Frontend Integration (`frontend/app/checkout/page.tsx` & `frontend/lib/api.ts`):
+  - `fetchOrderPreview`: Authoritative price and availability check when proceeding to review step.
+  - `createOrder`: Places order with generated unique order number, triggers `OrderSuccessModal`, and clears cart.
+
+
+### Customer Architecture & Security
+- `CustomerService` (`backend/src/customers/service.ts`):
+  - `getProfile(userId)`: Reads user profile from `public.profiles` for authenticated user.
+  - `updateProfile(userId, { firstName, lastName, phone })`: Safely updates profile name and phone. Client cannot alter `id` or `role`.
+  - `listAddresses(userId)`: Lists saved addresses ordered by `is_default DESC, created_at DESC`.
+  - `getAddressById(userId, addressId)`: Scoped address retrieval with ownership verification.
+  - `createAddress(userId, input)`: Saves address, auto-assigns default if first address or requested, unsetting previous default.
+  - `updateAddress(userId, addressId, input)`: Scoped address update with default handling.
+  - `deleteAddress(userId, addressId)`: Scoped address deletion, promoting next address to default if needed.
+  - `setDefaultAddress(userId, addressId)`: Atomically updates default delivery address for authenticated user.
+  - `listOrders(userId)`: Scoped order history with line items and order totals.
+  - `getOrderById(userId, orderId)`: Scoped order details with line items and fulfillment statuses.
+- Validation (`backend/src/customers/validation.ts`): Zod schemas for profiles and Indian addresses (6-digit PIN regex `/^\d{6}$/`, 10-digit mobile).
+- Customer Endpoints (`backend/src/customers/routes.ts`):
+  - `GET /api/customers/me`
+  - `PATCH /api/customers/me`
+  - `GET /api/customers/me/addresses`
+  - `POST /api/customers/me/addresses`
+  - `GET /api/customers/me/addresses/:id`
+  - `PATCH /api/customers/me/addresses/:id`
+  - `DELETE /api/customers/me/addresses/:id`
+  - `PATCH /api/customers/me/addresses/:id/default`
+  - `GET /api/customers/me/orders`
+  - `GET /api/customers/me/orders/:id`
+- Customer Account UI (`frontend/app/account/AccountDashboard.tsx`):
+  - **Profile Tab**: Edit name, phone, display email and account status with live feedback toasts.
+  - **Addresses Tab**: Saved address cards with default badge, address creation/editing modal, delete, and set default action.
+  - **Orders Tab**: Private order history cards with order status badges, expandable line items breakdown, and totals.
+
 
 ### Inventory Architecture & Security
 - `InventoryService` (`backend/src/inventory/service.ts`):

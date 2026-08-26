@@ -238,31 +238,434 @@ export async function validateDiscount(
   };
 }
 
-export interface PublicStockResponse {
-  productId: string;
-  inStock: boolean;
-  status: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
-  label: string;
+export interface CustomerProfile {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  role: 'customer' | 'admin';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerAddress {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerOrderItem {
+  id: string;
+  productName: string;
+  productSku: string;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+  customization?: Record<string, any>;
+}
+
+export interface CustomerOrder {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  shippingAddress: Record<string, any>;
+  orderStatus: string;
+  paymentStatus: string;
+  paymentMethod: string;
+  subtotal: number;
+  discountAmount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  createdAt: string;
+  items: CustomerOrderItem[];
 }
 
 /**
- * Check stock status for a product.
+ * Fetch authenticated customer profile.
  */
-export async function checkProductStock(productId: string): Promise<PublicStockResponse | null> {
-  const url = `${API_BASE_URL}/api/inventory/${encodeURIComponent(productId)}`;
+export async function fetchCustomerProfile(token: string): Promise<CustomerProfile | null> {
+  const url = `${API_BASE_URL}/api/customers/me`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.profile || null;
+    }
+  } catch (error) {
+    console.warn('[API Client] fetchCustomerProfile failed:', error);
+  }
+
+  return null;
+}
+
+/**
+ * Update authenticated customer profile fields (firstName, lastName, phone).
+ */
+export async function updateCustomerProfile(
+  token: string,
+  data: { firstName?: string; lastName?: string; phone?: string | null }
+): Promise<CustomerProfile | null> {
+  const url = `${API_BASE_URL}/api/customers/me`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      return result.profile || null;
+    }
+  } catch (error) {
+    console.warn('[API Client] updateCustomerProfile failed:', error);
+  }
+
+  return null;
+}
+
+/**
+ * List saved addresses for the authenticated customer.
+ */
+export async function fetchCustomerAddresses(token: string): Promise<CustomerAddress[]> {
+  const url = `${API_BASE_URL}/api/customers/me/addresses`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.addresses || [];
+    }
+  } catch (error) {
+    console.warn('[API Client] fetchCustomerAddresses failed:', error);
+  }
+
+  return [];
+}
+
+/**
+ * Create a new address for the authenticated customer.
+ */
+export async function createCustomerAddress(
+  token: string,
+  data: Omit<CustomerAddress, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
+): Promise<CustomerAddress | null> {
+  const url = `${API_BASE_URL}/api/customers/me/addresses`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      return result.address || null;
+    }
+  } catch (error) {
+    console.warn('[API Client] createCustomerAddress failed:', error);
+  }
+
+  return null;
+}
+
+/**
+ * Update an existing customer address.
+ */
+export async function updateCustomerAddress(
+  token: string,
+  addressId: string,
+  data: Partial<Omit<CustomerAddress, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>
+): Promise<CustomerAddress | null> {
+  const url = `${API_BASE_URL}/api/customers/me/addresses/${encodeURIComponent(addressId)}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      return result.address || null;
+    }
+  } catch (error) {
+    console.warn('[API Client] updateCustomerAddress failed:', error);
+  }
+
+  return null;
+}
+
+/**
+ * Delete a customer address.
+ */
+export async function deleteCustomerAddress(token: string, addressId: string): Promise<boolean> {
+  const url = `${API_BASE_URL}/api/customers/me/addresses/${encodeURIComponent(addressId)}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return res.ok;
+  } catch (error) {
+    console.warn('[API Client] deleteCustomerAddress failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Set an address as the default delivery address.
+ */
+export async function setDefaultCustomerAddress(
+  token: string,
+  addressId: string
+): Promise<CustomerAddress | null> {
+  const url = `${API_BASE_URL}/api/customers/me/addresses/${encodeURIComponent(addressId)}/default`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      return result.address || null;
+    }
+  } catch (error) {
+    console.warn('[API Client] setDefaultCustomerAddress failed:', error);
+  }
+
+  return null;
+}
+
+/**
+ * List orders for the authenticated customer.
+ */
+export async function fetchCustomerOrders(token: string): Promise<CustomerOrder[]> {
+  const url = `${API_BASE_URL}/api/customers/me/orders`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.orders || [];
+    }
+  } catch (error) {
+    console.warn('[API Client] fetchCustomerOrders failed:', error);
+  }
+
+  return [];
+}
+
+export interface OrderPreviewPayload {
+  items: Array<{
+    productId: string;
+    quantity: number;
+    customization?: Record<string, any>;
+  }>;
+  couponCode?: string | null;
+  paymentMethod: 'full_online' | 'hybrid' | 'cod' | 'unknown';
+}
+
+export interface OrderPreviewResult {
+  items: Array<{
+    productId: string;
+    name: string;
+    sku: string;
+    slug: string;
+    unitPrice: number;
+    quantity: number;
+    lineTotal: number;
+    customization?: Record<string, any>;
+    image?: string;
+  }>;
+  itemCount: number;
+  subtotal: number;
+  couponCode?: string;
+  couponDiscount: number;
+  paymentMethod: string;
+  paymentMethodDiscount: number;
+  totalDiscount: number;
+  shippingFee: number;
+  taxAmount: number;
+  totalAmount: number;
+  payNowAmount: number;
+  codAmount: number;
+}
+
+/**
+ * Fetch authoritative order calculation and inventory availability from backend.
+ */
+export async function fetchOrderPreview(
+  payload: OrderPreviewPayload,
+  token?: string
+): Promise<{ success: boolean; preview?: OrderPreviewResult; error?: string }> {
+  const url = `${API_BASE_URL}/api/orders/preview`;
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.preview) {
+      return { success: true, preview: data.preview };
+    }
+    return { success: false, error: data.message || 'Failed to calculate order preview.' };
+  } catch (error: any) {
+    console.warn('[API Client] fetchOrderPreview failed:', error);
+    return { success: false, error: error.message || 'Network error occurred.' };
+  }
+}
+
+export interface CreateOrderPayload {
+  items: Array<{
+    productId: string;
+    quantity: number;
+    customization?: Record<string, any>;
+  }>;
+  shippingAddress: {
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country?: string;
+  };
+  couponCode?: string | null;
+  paymentMethod: 'full_online' | 'hybrid' | 'cod' | 'unknown';
+  notes?: string;
+}
+
+/**
+ * Submit order to backend for creation, stock deduction, and discount recording.
+ */
+export async function createOrder(
+  payload: CreateOrderPayload,
+  token?: string
+): Promise<{ success: boolean; order?: CustomerOrder; error?: string }> {
+  const url = `${API_BASE_URL}/api/orders`;
+
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.ok && data.order) {
+      return { success: true, order: data.order };
+    }
+    return { success: false, error: data.message || 'Failed to create order.' };
+  } catch (error: any) {
+    console.warn('[API Client] createOrder failed:', error);
+    return { success: false, error: error.message || 'Network error occurred.' };
+  }
+}
+
+/**
+ * Track order by public orderNumber.
+ */
+export async function trackOrder(orderNumber: string): Promise<any | null> {
+  const url = `${API_BASE_URL}/api/orders/${encodeURIComponent(orderNumber.trim())}`;
 
   try {
     const res = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
-      next: { revalidate: 15 },
     });
 
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      return data.tracking || null;
     }
   } catch (error) {
-    console.warn(`[API Client] Check stock error for ${productId}:`, error);
+    console.warn('[API Client] trackOrder failed:', error);
   }
 
   return null;

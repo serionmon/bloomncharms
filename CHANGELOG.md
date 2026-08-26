@@ -1,5 +1,67 @@
 # Bloomncharms — Changelog
 
+## [0.8.0] — 2026-08-26 — Orders & Checkout Backend (Milestone 8)
+
+### Added
+
+#### Backend Orders & Authoritative Calculations
+- `OrderService` (`backend/src/orders/service.ts`):
+  - `previewOrder()`: Authoritative cart validation verifying product existence, active status, available stock in `public.inventory`, database catalog prices, promotional coupons, and payment method discounts (10% online savings on `full_online` or 50/50 split on `hybrid`).
+  - `createOrder()`: Atomic order placement in `public.orders`, snapshot line items in `public.order_items` (preserving historical name, SKU, unit price), safe inventory stock deduction, and promotional usage logging in `public.discount_usage`.
+  - `getOrderByOrderNumber()`: Public order tracking lookup.
+- Order Validation (`backend/src/orders/validation.ts`): Zod schemas for order previews, creation, items, and delivery addresses.
+- Order Routes (`backend/src/orders/routes.ts`):
+  - `POST /api/orders/preview`: Server calculation & availability check.
+  - `POST /api/orders`: Authoritative order placement.
+  - `GET /api/orders/:orderNumber`: Public tracking lookup.
+  - `GET /api/orders/my-orders`: Authenticated customer order history.
+
+#### Frontend Checkout Integration
+- `frontend/app/checkout/page.tsx`:
+  - Connected Step 3 (Review) to `POST /api/orders/preview` for live server calculation and availability check.
+  - Connected Place Order button to `POST /api/orders` for real backend transaction.
+  - Integrated `OrderSuccessModal` with the authoritative `orderNumber` returned from the server.
+- `frontend/lib/api.ts`: Added `fetchOrderPreview`, `createOrder`, and `trackOrder` client helpers.
+
+#### Automated Test Suite
+- `backend/src/scripts/test-orders.ts`: Automated test suite covering price calculation, payment discounts, split calculations, out-of-stock rejection, invalid address rejection, order creation, line item snapshots, inventory deduction, and tracking lookups.
+
+---
+
+## [0.7.0] — 2026-08-26 — Customer Account Dashboard (Milestone 7)
+
+### Added
+
+#### Backend Customer Profile & Address Infrastructure
+- `CustomerService` (`backend/src/customers/service.ts`):
+  - `getProfile()`: Retrieves user profile from `public.profiles` for authenticated user.
+  - `updateProfile()`: Updates first name, last name, and phone with strict scoping (prevents tampering with ID or role).
+  - `listAddresses()`: Lists saved addresses ordered by default status and creation date.
+  - `getAddressById()`: Scoped address retrieval with ownership verification.
+  - `createAddress()`: Saves recipient details, street address, and Indian PIN code with automatic default assignment.
+  - `updateAddress()`: Scoped address updates with atomic default switching.
+  - `deleteAddress()`: Scoped address deletion, promoting remaining address to default if needed.
+  - `setDefaultAddress()`: Atomically designates an address as the default delivery location.
+  - `listOrders()`: Scoped order history with line items, snapshots, and order totals.
+  - `getOrderById()`: Scoped order details lookup.
+- Customer Validation (`backend/src/customers/validation.ts`): Zod schemas for profiles and Indian addresses (6-digit PIN regex `/^\d{6}$/`, 10-digit mobile number).
+- Customer Routes (`backend/src/customers/routes.ts`):
+  - Profile: `GET /api/customers/me`, `PATCH /api/customers/me`.
+  - Addresses: `GET /api/customers/me/addresses`, `POST /api/customers/me/addresses`, `GET /api/customers/me/addresses/:id`, `PATCH /api/customers/me/addresses/:id`, `DELETE /api/customers/me/addresses/:id`, `PATCH /api/customers/me/addresses/:id/default`.
+  - Orders: `GET /api/customers/me/orders`, `GET /api/customers/me/orders/:id`.
+
+#### Frontend Customer Account UI
+- `frontend/app/account/AccountDashboard.tsx`: Polished multi-tab customer dashboard:
+  - **Profile Tab**: Edit personal information (first name, last name, phone), display authenticated email and member since details.
+  - **Addresses Tab**: Saved address cards with "Default" badge, modal for adding/editing addresses, delete button, and "Set Default" toggle.
+  - **Orders Tab**: Private order history cards with order status badges, expandable line item breakdown, and financial totals.
+- `frontend/lib/api.ts`: Added customer API helpers (`fetchCustomerProfile`, `updateCustomerProfile`, `fetchCustomerAddresses`, `createCustomerAddress`, `updateCustomerAddress`, `deleteCustomerAddress`, `setDefaultCustomerAddress`, `fetchCustomerOrders`).
+
+#### Automated Test Suite
+- `backend/src/scripts/test-customer-account.ts`: Automated tests covering unauthenticated rejection (401), customer profile CRUD, address creation, default address switching, address editing, address deletion, order history access, and cross-customer IDOR protection (404).
+
+---
+
 ## [0.6.0] — 2026-08-26 — Inventory & Discount Infrastructure (Milestone 6)
 
 ### Added

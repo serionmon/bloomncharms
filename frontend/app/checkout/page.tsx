@@ -4,9 +4,10 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCart } from '@/components/commerce/CartProvider';
+import { useAuth } from '@/components/auth/AuthProvider';
 import OrderSuccessModal from '@/components/commerce/OrderSuccessModal';
 import PaymentSelector, { PaymentMethodType } from '@/components/commerce/PaymentSelector';
-import { validateDiscount } from '@/lib/api';
+import { validateDiscount, fetchOrderPreview, createOrder, type OrderPreviewResult } from '@/lib/api';
 
 interface FormData {
   firstName: string;
@@ -33,6 +34,7 @@ interface FormErrors {
 }
 
 export default function CheckoutPage() {
+  const { session } = useAuth();
   const { items, getSubtotal, clearCart } = useCart();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('full_online');
@@ -42,6 +44,11 @@ export default function CheckoutPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null);
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [couponMessage, setCouponMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Authoritative server preview & order placement states
+  const [serverPreview, setServerPreview] = useState<OrderPreviewResult | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -58,17 +65,41 @@ export default function CheckoutPage() {
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
-  const [generatedOrderNumber, setGeneratedOrderNumber] = useState('BC-DEMO-1042');
+  const [generatedOrderNumber, setGeneratedOrderNumber] = useState('');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
-  // Financial calculations
-  const subtotal = getSubtotal();
-  const couponDiscount = appliedCoupon ? appliedCoupon.discountAmount : 0;
+  // Financial calculations (authoritative from server when available, otherwise local derivation)
+  const subtotal = serverPreview?.subtotal ?? getSubtotal();
+  const couponDiscount = serverPreview ? serverPreview.couponDiscount : (appliedCoupon ? appliedCoupon.discountAmount : 0);
   const subtotalAfterCoupon = Math.max(0, subtotal - couponDiscount);
-  const onlineDiscount = paymentMethod === 'full_online' ? Math.round(subtotalAfterCoupon * 0.1) : 0;
-  const total = subtotalAfterCoupon - onlineDiscount;
-  const payNowAmount = paymentMethod === 'full_online' ? total : Math.round(total * 0.5);
-  const codAmount = paymentMethod === 'hybrid' ? total - payNowAmount : 0;
+  const onlineDiscount = serverPreview ? serverPreview.paymentMethodDiscount : (paymentMethod === 'full_online' ? Math.round(subtotalAfterCoupon * 0.1) : 0);
+  const total = serverPreview ? serverPreview.totalAmount : (subtotalAfterCoupon - onlineDiscount);
+  const payNowAmount = serverPreview ? serverPreview.payNowAmount : (paymentMethod === 'full_online' ? total : Math.round(total * 0.5));
+  const codAmount = serverPreview ? serverPreview.codAmount : (paymentMethod === 'hybrid' ? total - payNowAmount : 0);
+
+  const token = session?.access_token;
+
+  const loadServerPreview = async () => {
+    if (items.length === 0) return;
+    setIsLoadingPreview(true);
+    setOrderError(null);
+
+    const res = await fetchOrderPreview(
+      {
+        items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+        couponCode: appliedCoupon?.code,
+        paymentMethod,
+      },
+      token
+    );
+
+    if (res.success && res.preview) {
+      setServerPreview(res.preview);
+    } else if (res.error) {
+      setOrderError(res.error);
+    }
+    setIsLoadingPreview(false);
+  };
 
   const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +124,10 @@ export default function CheckoutPage() {
           text: `Coupon applied: Saved ₹${res.discountAmount.toLocaleString('en-IN')}`,
         });
         setCouponCode('');
+        // Refresh server preview with coupon
+        if (step === 3) {
+          setTimeout(loadServerPreview, 50);
+        }
       } else {
         setAppliedCoupon(null);
         setCouponMessage({
@@ -114,11 +149,13 @@ export default function CheckoutPage() {
     setAppliedCoupon(null);
     setCouponMessage(null);
     setCouponCode('');
+    if (step === 3) {
+      setTimeout(loadServerPreview, 50);
+    }
   };
 
   const validateStep1 = (): boolean => {
     const newErrors: FormErrors = {};
-    // Allows letters, spaces, hyphens, apostrophes — covers Indian names and states
     const nameRegex = /^[A-Za-z][A-Za-z\s'\-]*$/;
     const phoneRegex = /^[6-9]\d{9}$/;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -126,7 +163,6 @@ export default function CheckoutPage() {
 
     if (formData.firstName.trim().length < 2 || !nameRegex.test(formData.firstName.trim())) newErrors.firstName = 'Enter a valid first name (letters only, min 2 chars)';
     if (formData.lastName.trim().length < 2 || !nameRegex.test(formData.lastName.trim())) newErrors.lastName = 'Enter a valid last name (letters only, min 2 chars)';
-    // Strip spaces, dashes and common Indian prefixes (+91, 91, 0) before checking
     const normalizedPhone = formData.phone.replace(/[\s\-().+]/g, '').replace(/^(91|0)/, '');
     if (!normalizedPhone || !phoneRegex.test(normalizedPhone)) newErrors.phone = 'Enter a valid 10-digit Indian mobile number (e.g. 98765 43210)';
     if (formData.email && !emailRegex.test(formData.email)) newErrors.email = 'Invalid email format';
@@ -150,11 +186,12 @@ export default function CheckoutPage() {
   const handleContinueToReview = () => {
     if (validateStep1()) {
       setStep(3);
+      loadServerPreview();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (items.length === 0) return;
     if (!validateStep1()) {
       setStep(1);
@@ -162,13 +199,41 @@ export default function CheckoutPage() {
     }
 
     setIsPlacingOrder(true);
+    setOrderError(null);
 
-    window.setTimeout(() => {
-      setGeneratedOrderNumber('BC-DEMO-PREVIEW');
+    const normalizedPhone = formData.phone.replace(/[\s\-().+]/g, '').replace(/^(91|0)/, '');
+
+    const res = await createOrder(
+      {
+        items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+        shippingAddress: {
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          phone: normalizedPhone,
+          email: formData.email.trim(),
+          addressLine1: formData.address.trim(),
+          addressLine2: formData.apartment.trim() || undefined,
+          city: formData.city.trim(),
+          state: formData.state.trim(),
+          postalCode: formData.pinCode.trim(),
+          country: 'IN',
+        },
+        couponCode: appliedCoupon?.code,
+        paymentMethod,
+        notes: formData.notes.trim() || undefined,
+      },
+      token
+    );
+
+    if (res.success && res.order) {
+      setGeneratedOrderNumber(res.order.orderNumber);
       setIsSuccessModalOpen(true);
       setIsPlacingOrder(false);
       clearCart();
-    }, 250);
+    } else {
+      setOrderError(res.error || 'Failed to place order. Please check item stock or address.');
+      setIsPlacingOrder(false);
+    }
   };
 
   return (
@@ -559,6 +624,25 @@ export default function CheckoutPage() {
                       Review your items, delivery details, and payment breakdown before confirming.
                     </p>
                   </div>
+
+                  {orderError && (
+                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded text-red-700 text-xs font-label-sm uppercase tracking-wider flex items-center justify-between">
+                      <span>{orderError}</span>
+                      <button
+                        onClick={() => setOrderError(null)}
+                        className="underline text-red-800 cursor-pointer"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  )}
+
+                  {isLoadingPreview && (
+                    <div className="p-3 bg-secondary/10 border border-secondary/20 rounded text-secondary text-xs font-label-sm uppercase tracking-wider flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>
+                      <span>Validating catalog availability & current prices...</span>
+                    </div>
+                  )}
 
                   {/* ORDER SUMMARY LIST */}
                   <div className="p-lg bg-surface-container-low border border-border flex flex-col gap-md rounded">
