@@ -1,10 +1,11 @@
 import React from 'react';
 import Link from 'next/link';
-import { PRODUCTS } from '@/content/products';
+import { fetchProducts } from '@/lib/api';
 import BouquetCard from '@/components/ui/BouquetCard';
 
-export default function BouquetsPage() {
-  const bouquetProducts = PRODUCTS.filter((p) => p.category === 'bouquets').slice(0, 4);
+export default async function BouquetsPage() {
+  const { products } = await fetchProducts({ category: 'bouquets' });
+  const bouquetProducts = products.slice(0, 4);
 
   return (
     <div className="flex flex-col w-full bg-background min-h-screen">

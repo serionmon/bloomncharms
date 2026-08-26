@@ -1,25 +1,89 @@
-'use client';
+﻿'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
-import { getProductBySlug, PRODUCTS, getStockStatus } from '@/content/products';
+import { Product, getStockStatus } from '@/content/products';
 import { useCart } from '@/components/commerce/CartProvider';
+import { fetchProductBySlug } from '@/lib/api';
 
 export default function ProductDetailPage() {
   const router = useRouter();
   const params = useParams<{ slug: string }>();
   const slug = params?.slug;
 
-  const product = (slug && getProductBySlug(slug)) || PRODUCTS[0];
-  const stockInfo = getStockStatus(product.stock, product.available);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasError, setHasError] = useState<boolean>(false);
 
   const { addItem } = useCart();
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState<number>(1);
   const [activeTab, setActiveTab] = useState<'materials' | 'dimensions' | 'care' | 'shipping'>('materials');
-  const [personalization, setPersonalization] = useState('');
+  const [personalization, setPersonalization] = useState<string>('');
 
+  const loadProduct = useCallback(async (productSlug: string) => {
+    setIsLoading(true);
+    setHasError(false);
+    try {
+      const res = await fetchProductBySlug(productSlug);
+      setProduct(res.product);
+    } catch (err) {
+      console.error(`[ProductDetailPage] Failed to fetch product ${productSlug}:`, err);
+      setHasError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (slug) {
+      loadProduct(slug);
+    }
+  }, [slug, loadProduct]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col w-full bg-background min-h-screen">
+        <section className="flex flex-col lg:flex-row w-full pt-md lg:pt-lg pb-section-desktop lg:min-h-screen animate-pulse">
+          <div className="w-full lg:w-[60%] px-md lg:pl-xxl lg:pr-lg">
+            <div className="w-full aspect-[4/5] bg-surface-container border border-border" />
+          </div>
+          <div className="w-full lg:w-[40%] px-md lg:pr-xxl lg:pl-lg flex flex-col justify-center gap-md py-xl lg:py-0">
+            <div className="h-4 bg-surface-container rounded w-1/4" />
+            <div className="h-10 bg-surface-container rounded w-3/4" />
+            <div className="h-6 bg-surface-container rounded w-1/3" />
+            <div className="h-20 bg-surface-container rounded w-full mt-4" />
+            <div className="h-12 bg-surface-container rounded w-full mt-6" />
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (hasError || !product) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] px-lg text-center bg-background">
+        <span className="material-symbols-outlined text-4xl text-primary mb-md block">
+          search_off
+        </span>
+        <h1 className="font-display-lg text-on-surface uppercase tracking-tight mb-sm">
+          Product Not Found
+        </h1>
+        <p className="font-body-lg text-on-surface-variant italic mb-xl max-w-md">
+          The piece you are looking for may have been archived or is temporarily unavailable.
+        </p>
+        <Link
+          href="/shop"
+          className="bg-primary text-on-primary font-label-sm uppercase tracking-widest px-8 py-3.5 rounded hover:bg-primary-container transition-colors shadow-sm"
+        >
+          Explore All Collections
+        </Link>
+      </div>
+    );
+  }
+
+  const stockInfo = getStockStatus(product.stock, product.available);
   const maxStock = product.stock || 99;
 
   const handleAddToCart = () => {
@@ -163,10 +227,11 @@ export default function ProductDetailPage() {
                 {/* Primary CTA */}
                 <button
                   type="button"
+                  disabled={!product.available || product.stock <= 0}
                   onClick={handleAddToCart}
-                  className="flex-1 bg-primary text-on-primary h-12 rounded-full font-label-sm uppercase tracking-widest hover:bg-primary-container transition-colors shadow-sm flex items-center justify-center gap-sm group"
+                  className="flex-1 bg-primary text-on-primary h-12 rounded-full font-label-sm uppercase tracking-widest hover:bg-primary-container transition-colors shadow-sm flex items-center justify-center gap-sm group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Add to Cart
+                  {product.available && product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
                   <span className="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">
                     shopping_bag
                   </span>
@@ -176,8 +241,9 @@ export default function ProductDetailPage() {
               {/* Secondary CTA */}
               <button
                 type="button"
+                disabled={!product.available || product.stock <= 0}
                 onClick={handleBuyNow}
-                className="w-full h-12 bg-transparent text-secondary font-label-sm uppercase tracking-widest border border-border rounded-full hover:bg-surface-container-highest transition-colors flex items-center justify-center"
+                className="w-full h-12 bg-transparent text-secondary font-label-sm uppercase tracking-widest border border-border rounded-full hover:bg-surface-container-highest transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Buy Now
               </button>

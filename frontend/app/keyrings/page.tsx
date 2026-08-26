@@ -1,12 +1,12 @@
 import React from 'react';
 import Link from 'next/link';
-import { PRODUCTS } from '@/content/products';
+import { fetchProducts } from '@/lib/api';
 import ProductCard from '@/components/ui/ProductCard';
 
-export default function KeyringsPage() {
-  const keyringProducts = PRODUCTS.filter((p) => p.category === 'keyrings');
-  const mainCollection = keyringProducts.slice(0, 8);
-  const moreProducts = keyringProducts.slice(8, 12);
+export default async function KeyringsPage() {
+  const { products } = await fetchProducts({ category: 'keyrings' });
+  const mainCollection = products.slice(0, 8);
+  const moreProducts = products.slice(8, 12);
 
   const addOnItems = [
     {

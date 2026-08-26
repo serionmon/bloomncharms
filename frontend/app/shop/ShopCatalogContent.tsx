@@ -1,8 +1,9 @@
-'use client';
+﻿'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { PRODUCTS } from '@/content/products';
+import { Product } from '@/content/products';
+import { fetchProducts } from '@/lib/api';
 import CatalogProductCard from '@/components/catalog/CatalogProductCard';
 
 const CATEGORIES = [
@@ -22,16 +23,37 @@ export default function ShopCatalogContent() {
   const initialCategory = searchParams.get('category') || 'all';
   const [activeCategory, setActiveCategory] = useState(initialCategory);
   const [sortBy, setSortBy] = useState<SortOption>('featured');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasError, setHasError] = useState<boolean>(false);
+
+  const loadProducts = useCallback(async () => {
+    setIsLoading(true);
+    setHasError(false);
+    try {
+      const res = await fetchProducts();
+      setProducts(res.products);
+    } catch (err) {
+      console.error('[ShopCatalogContent] Failed to fetch products:', err);
+      setHasError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
 
   useEffect(() => {
     setActiveCategory(searchParams.get('category') || 'all');
   }, [searchParams]);
 
   const filteredProducts = useMemo(() => {
-    if (activeCategory === 'all') return PRODUCTS;
-    if (activeCategory === 'custom') return PRODUCTS.filter((product) => product.isCustomizable);
-    return PRODUCTS.filter((product) => product.category === activeCategory);
-  }, [activeCategory]);
+    if (activeCategory === 'all') return products;
+    if (activeCategory === 'custom') return products.filter((product) => product.isCustomizable);
+    return products.filter((product) => product.category === activeCategory);
+  }, [activeCategory, products]);
 
   const sortedProducts = useMemo(() => {
     return [...filteredProducts].sort((a, b) => {
@@ -77,7 +99,7 @@ export default function ShopCatalogContent() {
       <section className="sticky top-16 z-40 w-full border-b border-border bg-surface/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-lg lg:px-xxl">
           <span className="font-label-sm text-xs uppercase tracking-widest text-on-surface-muted">
-            {sortedProducts.length} {sortedProducts.length === 1 ? 'Item' : 'Items'}
+            {isLoading ? 'Loading...' : `${sortedProducts.length} ${sortedProducts.length === 1 ? 'Item' : 'Items'}`}
           </span>
 
           <label className="flex items-center gap-xs font-label-sm text-xs uppercase tracking-widest text-on-surface">
@@ -98,13 +120,51 @@ export default function ShopCatalogContent() {
 
       <section className="w-full py-xl lg:py-section-desktop">
         <div className="mx-auto max-w-7xl px-lg lg:px-xxl">
-          {sortedProducts.length ? (
+          {isLoading ? (
+            /* Loading State: Editorial Skeleton Grid */
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 lg:gap-lg">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={`skeleton-shop-${i}`}
+                  className="flex flex-col bg-surface-container-lowest border border-border animate-pulse"
+                >
+                  <div className="w-full aspect-[4/5] bg-surface-container" />
+                  <div className="p-3 sm:p-md flex flex-col gap-2">
+                    <div className="h-3 bg-surface-container rounded w-1/3" />
+                    <div className="h-4 bg-surface-container rounded w-3/4" />
+                    <div className="h-3 bg-surface-container rounded w-1/2 mt-2" />
+                    <div className="h-8 bg-surface-container rounded w-full mt-3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : hasError ? (
+            /* Error State with Graceful Retry */
+            <div className="border-y border-border py-xxl text-center p-xl">
+              <span className="material-symbols-outlined text-3xl text-primary mb-sm block">
+                sync_problem
+              </span>
+              <h2 className="font-headline-sm text-headline-sm text-on-surface">Connection to collection unavailable</h2>
+              <p className="mx-auto mt-sm max-w-md font-body-md text-body-md italic text-on-surface-muted mb-md">
+                We were unable to load the latest catalog. Please try again.
+              </p>
+              <button
+                type="button"
+                onClick={loadProducts}
+                className="font-label-sm text-xs text-primary uppercase tracking-widest border border-primary px-4 py-2 hover:bg-primary hover:text-on-primary transition-colors cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          ) : sortedProducts.length ? (
+            /* Normal Product Grid */
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 lg:gap-lg">
               {sortedProducts.map((product, index) => (
                 <CatalogProductCard key={product.id} product={product} priority={index < 4} />
               ))}
             </div>
           ) : (
+            /* Empty State */
             <div className="border-y border-border py-xxl text-center">
               <h2 className="font-headline-sm text-headline-sm text-on-surface">Nothing here yet</h2>
               <p className="mx-auto mt-sm max-w-md font-body-md text-body-md italic text-on-surface-muted">

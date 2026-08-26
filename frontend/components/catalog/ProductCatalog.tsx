@@ -1,7 +1,8 @@
-'use client';
+﻿'use client';
 
-import React, { useState, useMemo } from 'react';
-import { PRODUCTS, ProductCategory, Product } from '@/content/products';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { ProductCategory, Product } from '@/content/products';
+import { fetchProducts } from '@/lib/api';
 import CatalogProductCard from './CatalogProductCard';
 
 type FilterOption = 'ALL' | 'BOUQUETS' | 'FLOWERS' | 'KEYRINGS' | 'CHARMS' | 'GIFT SETS';
@@ -17,17 +18,38 @@ const FILTER_TABS: { label: FilterOption; categoryKey: 'all' | ProductCategory }
 
 export default function ProductCatalog() {
   const [activeFilter, setActiveFilter] = useState<FilterOption>('ALL');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasError, setHasError] = useState<boolean>(false);
+
+  const loadCatalog = useCallback(async () => {
+    setIsLoading(true);
+    setHasError(false);
+    try {
+      const res = await fetchProducts();
+      setProducts(res.products);
+    } catch (err) {
+      console.error('[ProductCatalog] Failed to load products:', err);
+      setHasError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
 
   const filteredProducts = useMemo(() => {
     if (activeFilter === 'ALL') {
-      return PRODUCTS;
+      return products;
     }
     const currentTab = FILTER_TABS.find((t) => t.label === activeFilter);
     if (!currentTab || currentTab.categoryKey === 'all') {
-      return PRODUCTS;
+      return products;
     }
-    return PRODUCTS.filter((product) => product.category === currentTab.categoryKey);
-  }, [activeFilter]);
+    return products.filter((product) => product.category === currentTab.categoryKey);
+  }, [activeFilter, products]);
 
   return (
     <section
@@ -59,8 +81,8 @@ export default function ProductCatalog() {
               const isActive = activeFilter === tab.label;
               const productCount =
                 tab.categoryKey === 'all'
-                  ? PRODUCTS.length
-                  : PRODUCTS.filter((p) => p.category === tab.categoryKey).length;
+                  ? products.length
+                  : products.filter((p) => p.category === tab.categoryKey).length;
 
               return (
                 <button
@@ -76,37 +98,75 @@ export default function ProductCatalog() {
                   aria-label={`Filter by ${tab.label}`}
                 >
                   {tab.label}
-                  <span
-                    className={`ml-1.5 text-[10px] opacity-80 ${
-                      isActive ? 'text-on-primary' : 'text-on-surface-muted'
-                    }`}
-                  >
-                    ({productCount})
-                  </span>
+                  {!isLoading && (
+                    <span
+                      className={`ml-1.5 text-[10px] opacity-80 ${
+                        isActive ? 'text-on-primary' : 'text-on-surface-muted'
+                      }`}
+                    >
+                      ({productCount})
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Product Grid */}
+        {/* Product Grid / Loading / Error / Empty States */}
         <div className="w-full">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-md lg:gap-lg">
-            {filteredProducts.map((product, idx) => (
-              <CatalogProductCard
-                key={product.id}
-                product={product}
-                priority={idx < 4}
-              />
-            ))}
-          </div>
-
-          {/* Empty state fallback if zero matches */}
-          {filteredProducts.length === 0 && (
+          {isLoading ? (
+            /* Loading State: Editorial Skeleton Grid */
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-md lg:gap-lg">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={`skeleton-${i}`}
+                  className="flex flex-col bg-surface-container-lowest border border-border animate-pulse"
+                >
+                  <div className="w-full aspect-[4/5] bg-surface-container" />
+                  <div className="p-3 sm:p-md flex flex-col gap-2">
+                    <div className="h-3 bg-surface-container rounded w-1/3" />
+                    <div className="h-4 bg-surface-container rounded w-3/4" />
+                    <div className="h-3 bg-surface-container rounded w-1/2 mt-2" />
+                    <div className="h-8 bg-surface-container rounded w-full mt-3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : hasError ? (
+            /* Error State with Graceful Retry */
+            <div className="py-xxl text-center border border-border bg-surface-container-low p-xl rounded">
+              <span className="material-symbols-outlined text-3xl text-primary mb-sm block">
+                sync_problem
+              </span>
+              <p className="font-body-md text-on-surface mb-sm">
+                Unable to load the latest atelier collection right now.
+              </p>
+              <button
+                type="button"
+                onClick={loadCatalog}
+                className="font-label-sm text-xs text-primary uppercase tracking-widest border border-primary px-4 py-2 hover:bg-primary hover:text-on-primary transition-colors cursor-pointer"
+              >
+                Retry Connection
+              </button>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            /* Empty State */
             <div className="py-xxl text-center">
               <p className="font-body-md text-on-surface-muted italic">
                 No products found in this category.
               </p>
+            </div>
+          ) : (
+            /* Normal Catalog Grid */
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-md lg:gap-lg">
+              {filteredProducts.map((product, idx) => (
+                <CatalogProductCard
+                  key={product.id}
+                  product={product}
+                  priority={idx < 4}
+                />
+              ))}
             </div>
           )}
         </div>
